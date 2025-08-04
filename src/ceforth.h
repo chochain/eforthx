@@ -117,6 +117,7 @@ struct Code  {                     ///> Colon words
     XT         xt = NULL;          ///< execution token
     FV<Code*>  pf;                 ///< parameter field
     FV<DU>     q;                  ///< parameter field - literal
+    FV<Code*>  vt;                 ///< vtable for methods
     union {                        ///< union to reduce struct size
         U32 attr = 0;              /// * zero all sub-fields
         struct {
