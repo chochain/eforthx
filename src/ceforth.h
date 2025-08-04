@@ -40,11 +40,21 @@ struct FV : public vector<T> {      ///< our super-vector class
     }
     ~FV() {                         ///< free pointed elements
         if constexpr(is_pointer<T>::value) {
-            for (T t : *this) if (t != nullptr) { delete t; t = nullptr; }
+            for (T t : *this)
+                if (t->ref>1) printf("%s[%d--]\n", t->name, t->ref--);
+                else if (t != nullptr) { delete t; t = nullptr; }
         }
     }
-    void push(T n) { this->push_back(n); }
-    T    pop()     { T n = this->back(); this->pop_back(); return n; }
+    void push(T t) {
+        if constexpr(is_pointer<T>::value) printf("%s[%d++]\n", t->name, t->ref++);
+        this->push_back(t);
+    }
+    T    pop()     {
+        T t = this->back();
+        if constexpr(is_pointer<T>::value) printf("%s[%d--]\n", t->name, t->ref--);
+        this->pop_back();
+        return t;
+    }
     T    &operator[](int i) {
 #if CC_DEBUG
         return this->at(i < 0 ? (this->size() + i) : i); // with range checked
@@ -122,7 +132,7 @@ struct Code  {                     ///> Colon words
         U32 attr = 0;              /// * zero all sub-fields
         struct {
             U32 token   : 24;      ///< dict index, 0=param word
-            U32 xxx     :  3;      ///< reserved
+            U32 ref     :  3;      ///< reserved
             U32 is_bran :  1;      ///< branching opcode
             U32 stage   :  2;      ///< branching state
             U32 is_str  :  1;      ///< string flag
@@ -132,7 +142,7 @@ struct Code  {                     ///> Colon words
     Code(const char *s, const char *d, XT fp, U32 a);  ///> primitive
     Code(const char *s, bool n=true);                  ///> colon, n=new word
     Code(XT fp) : Code("", "", fp, 0) {}               ///> sub-classes
-    ~Code() { if (!xt) { delete name; delete desc; } } ///> delete name of colon word
+    ~Code() { if (ref==1 && !xt) { delete name; delete desc; } } ///> delete name of colon word
     Code *append(Code *w) { pf.push(w); return this; } ///> add token
     void nest(VM &vm);                                 ///> inner interpreter
 };
