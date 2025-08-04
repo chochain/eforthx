@@ -166,6 +166,7 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
+         if (!vm.compile++) DICT_PUSH(new Code(":noname"));
          ADD_W(new Bran(_if));
          DICT_PUSH(new Tmp())),
     IMMD("else",
@@ -182,7 +183,9 @@ const Code rom[] {               ///< Forth dictionary
          else {                                /// * else.{p1}.then, or
              BRAN(b->p1);                      /// * then.{p1}.next
              if (s==1) DICT_POP();             /// * if..else..then
-         }),
+         }
+         if (!--vm.compile) { printf("compile=%d", vm.compile); }
+         ),
     /// @}
     /// @defgroup Loops
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
@@ -238,12 +241,12 @@ const Code rom[] {               ///< Forth dictionary
     /// @}
     /// @defgrouop Compiler ops
     /// @{
-    CODE("[",      vm.compile = false),
-    CODE("]",      vm.compile = true),
+    CODE("[",      --vm.compile),
+    CODE("]",      vm.compile++),
     CODE(":",
          DICT_PUSH(new Code(word()));   /// create new word
-         vm.compile = true),
-    IMMD(";", vm.compile = false),
+         vm.compile++),
+    IMMD(";", --vm.compile),
     CODE("constant",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Lit(POP()));
@@ -266,15 +269,16 @@ const Code rom[] {               ///< Forth dictionary
          w->pf[0]->q.pop()),
     IMMD("does>",
          ADD_W(new Bran(_does));
-         last->pf[-1]->token = last->token),          /// keep WP
-    CODE("to",                                        /// n --
+         last->pf[-1]->token = last->token),                     /// keep WP
+    CODE("to",                                                   /// n --
          const Code *w = find(word()); if (!w) return;
-         VAR(w->token) = POP()),                      /// update value
-    CODE("is",                                        /// w -- 
-         DICT_PUSH(new Code(word(), false));          /// create word
-         int w = POP();                               /// like this word
-         last->xt = dict[w]->xt;                      /// if primitive
-         last->pf = dict[w]->pf),                     /// or colon word
+         VAR(w->token) = POP()),                                 /// update value
+    CODE("is",                                                   /// w -- 
+         Code *w = (Code*)find(word()); if (!w) return;          /// defered word
+         IU i = POPI();  if (i >= (IU)dict.size()) return;       /// like this word
+         w->xt = dict[i]->xt;                                    /// if primitive
+         w->pf.clear();                                          /// clear out pf
+         w->pf.merge(dict[i]->pf)),                              /// or colon word
     /// @}
     /// @defgroup Memory Access ops
     /// @{
@@ -515,7 +519,7 @@ int forth_vm(const char *line, void(*hook)(int, const char*)) {
         }
         catch (exception &e) {
             pstr(s); pstr("?"); pstr(e.what(), CR);
-            vm.compile = false;
+            vm.compile = 0;
             scan('\n');               /// * exhaust input line
         }
     }
