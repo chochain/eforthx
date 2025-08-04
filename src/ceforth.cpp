@@ -11,8 +11,9 @@ using namespace std;
 ///
 ///> Forth VM state variables
 ///
-FV<Code*> dict;                        ///< Forth dictionary
-Code      *last;                       ///< cached dict[-1]
+Code      root((XT)0);                ///< root namespace
+FV<Code*> dict = root.vt;             ///< global dictionary
+Code      *last;                      ///< last word cached
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
