@@ -68,7 +68,7 @@ struct ALIGNAS VM {
     
     U8       *base   = 0;          ///< numeric radix (a pointer)
     vm_state state   = STOP;       ///< VM status
-    bool     compile = false;      ///< compiler flag
+    IU       compile = 0;          ///< compiler status
 
     string   pad;
 #if DO_MULTITASK
