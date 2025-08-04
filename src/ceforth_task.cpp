@@ -192,7 +192,7 @@ void VM::reset(IU w, vm_state st) {
     wp         = w;                               /// * task word
     *base      = 10;                              /// * default decimal
     state      = st;
-    compile    = false;
+    compile    = 0;
 }
 void VM::stop() { set_state(STOP); }              /// * and release lock
 ///
