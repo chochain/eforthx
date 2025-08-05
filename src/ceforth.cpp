@@ -167,7 +167,7 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         if (!vm.compile++) DICT_PUSH(new Code(":noname"));
+         if (!vm.compile++) DICT_PUSH(new Code(":sub"));
          ADD_W(new Bran(_if));
          DICT_PUSH(new Tmp())),
     IMMD("else",
@@ -374,11 +374,10 @@ void Code::nest(VM &vm) {
     vm.state = NEST;                     /// * racing? No, helgrind says so
     if (xt) { xt(vm, *this); return; }   /// * run primitive word
     
-//  for (auto c : pf) {                  /// * CC: 5% slower (2% less I, 4% more Dr)
-    for (FV<Code*>::iterator c = pf.begin(); c != pf.end(); c++) {
-        try         { (*c)->nest(vm); }  /// * execute recursively
+    for (int i = 0, n = (int)pf.size(); i < n; i++) {
+        try         { pf[i]->nest(vm); } /// * execute recursively
         catch (...) { break; }
-        // printf("%-3x => RS=%d, SS=%d %s", (int)(c - pf.begin()), (int)vm.rs.size(), (int)vm.ss.size(), (*c)->name);
+        // printf("%-3x => RS=%d, SS=%d %s", i, (int)vm.rs.size(), (int)vm.ss.size(), (*c)->name);
     }
 }
 ///====================================================================
