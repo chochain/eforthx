@@ -131,8 +131,8 @@ struct Code  {                     ///> Colon words
     union {                        ///< union to reduce struct size
         U32 attr = 0;              /// * zero all sub-fields
         struct {
-            U32 token   : 24;      ///< dict index, 0=param word
-            U32 ref     :  3;      ///< reserved
+            U32 token   : 16;      ///< dict index, 0=param word, 64K max
+            U32 ref     : 11;      ///< reference count, 2K max
             U32 is_bran :  1;      ///< branching opcode
             U32 stage   :  2;      ///< branching state
             U32 is_str  :  1;      ///< string flag
@@ -141,8 +141,16 @@ struct Code  {                     ///> Colon words
     };
     Code(const char *s, const char *d, XT fp, U32 a);  ///> primitive
     Code(const char *s, bool n=true);                  ///> colon, n=new word
-    Code(XT fp) : Code("", "", fp, 0) {}               ///> sub-classes
-    ~Code() { if (ref==1 && !xt) { delete name; delete desc; } } ///> delete name of colon word
+    Code(XT fp) : Code("lit", "", fp, 0) {}               ///> sub-classes
+    ~Code() {
+        if (xt) return;
+        printf("%s.pf,q,vt[%ld,%ld,%ld].clear\n", name, pf.size(),q.size(),vt.size());
+        if (ref == 1) {
+            pf.clear(); pf.shrink_to_fit();
+            q.clear();  q.shrink_to_fit();
+            vt.clear(); vt.shrink_to_fit();
+        }
+    } ///> delete name of colon word
     Code *append(Code *w) { pf.push(w); return this; } ///> add token
     void nest(VM &vm);                                 ///> inner interpreter
 };
