@@ -145,7 +145,14 @@ void to_s(IU w, U8 *ip, int base) {
     }
     fout << setfill(' ') << setw(-1);   ///> restore output format settings
 }
-void see(IU pfa, int base) {
+void see(IU w, int base) {
+    Code &c = dict[w];
+    pstr(": "); pstr(c.name);
+    if (!IS_UDF(w)) {
+        pstr(" => "); pstr(c.desc); pstr(" ; "); dot(CR);
+        return;
+    }
+    IU pfa = c.pfa;
     U8 *ip = MEM(pfa);                  ///< memory pointer
     while (1) {
         IU w = pfa2didx(*(IU*)ip);      ///< fetch word index by pfa
@@ -164,6 +171,7 @@ void see(IU pfa, int base) {
         case VBRAN: ip = MEM(*(IU*)ip);                  break;
         }
     }
+    dot(CR);
 }
 void words(int base) {
     const int WIDTH = 60;

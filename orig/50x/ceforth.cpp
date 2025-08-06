@@ -117,7 +117,7 @@ void colon(const char *name) {
     int sz = STRLEN(name);          ///> string length, aligned
     pmem.push((U8*)name,  sz);      ///> setup raw name field
 
-    Code c(nfa, (FPTR)0, false);    ///> create a local blank word
+    Code c(nfa, "", (FPTR)0, false);///> create a local blank word
     c.attr = UDF_ATTR;              ///> specify a colon (user defined) word
     c.pfa  = HERE;                  ///> capture code field index
 
@@ -520,10 +520,7 @@ void dict_compile() {  ///< compile built-in words into dictionary
     CODE("words", words(*BASE));
     CODE("see",
          IU w = find(word()); if (!w) return;
-         pstr(": "); pstr(dict[w].name);
-         if (IS_UDF(w)) see(dict[w].pfa, *BASE);
-         else           pstr(" ( built-ins ) ;");
-         dot(CR));
+         see(w, *BASE));
     CODE("depth", IU i = UINT(SS.idx); PUSH(i));
     CODE("r",     PUSH(RS.idx));
     CODE("dump",
