@@ -173,6 +173,7 @@ typedef void (*FPTR)(VM&);  ///< function pointer
 struct Code {
     static UFP XT0;         ///< function pointer base (in registers hopefully)
     const char *name = 0;   ///< name field
+    const char *desc = 0;   ///< description
 #if DO_WASM
     union {                 ///< either a primitive or colon word
         FPTR xt = 0;        ///< vtable index
@@ -188,12 +189,14 @@ struct Code {
         };
     };
 #endif // DO_WASM
+    List<Code, 0> vt;       ///< vtable 
     static FPTR XT(IU ix)   INLINE { return (FPTR)(XT0 + (UFP)(ix & MSK_ATTR)); }
     static void exec(VM &vm, IU ix) INLINE { (*XT(ix))(vm); }
 
     Code() {}               ///< blank struct (for initilization)
     Code(const char *n, IU w) : name(n), xt((FPTR)((UFP)w)) {} ///< primitives
-    Code(const char *n, FPTR fp, bool im) : name(n), xt(fp) {  ///< built-in and colon words
+    Code(const char *n, const char *d, FPTR fp, bool im)
+        : name(n), desc(d), xt(fp) {  ///< built-in and colon words
         attr |= im ? IMM_ATTR : 0;
     }
     IU   xtoff() INLINE { return (IU)(((UFP)xt - XT0) & MSK_ATTR); }  ///< xt offset in code space
@@ -203,12 +206,12 @@ struct Code {
 ///@name Dictionary Compiler macros
 ///@note - a lambda without capture can degenerate into a function pointer
 ///@{
-#define ADD_CODE(n, g, im) {         \
-    Code c(n, [](VM& vm){ g; }, im); \
-    dict.push(c);                    \
+#define ADD_CODE(n, d, g, im) {              \
+    Code c(n, d, [](VM& vm){ g; }, im);      \
+    dict.push(c);                            \
     }
-#define CODE(n, g) ADD_CODE(n, g, false)
-#define IMMD(n, g) ADD_CODE(n, g, true)
+#define CODE(n, g) ADD_CODE(n, #g, g, false)
+#define IMMD(n, g) ADD_CODE(n, #g, g, true)
 ///@}
 ///@name Multitasking support
 ///@{
@@ -252,7 +255,7 @@ void pstr(const char *str, io_op op=SPCS);///< print string
 ///@name Debug functions
 ///@{
 void ss_dump(VM &vm, bool forced=false);  ///< show data stack content
-void see(IU pfa, int base);               ///< disassemble user defined word
+void see(IU w, int base);                 ///< disassemble user defined word
 void words(int base);                     ///< list dictionary words
 void dict_dump(int base);                 ///< dump dictionary
 void mem_dump(U32 addr, IU sz, int base); ///< dump memory frm addr...addr+sz
