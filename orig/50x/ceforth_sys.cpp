@@ -160,7 +160,7 @@ void see(IU w, int base) {
         
         fout << ENDL; fout << "  ";     /// * indent
         to_s(w, ip, base);              /// * display opcode
-        if (w==EXIT || w==VAR) return;  /// * end of word
+        if (w==EXIT || w==VAR) break;   /// * end of word
         
         ip += sizeof(IU);               ///> advance ip (next opcode)
         switch (w) {                    ///> extra bytes to skip
