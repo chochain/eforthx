@@ -11,9 +11,10 @@ using namespace std;
 ///
 ///> Forth VM state variables
 ///
-Code      root((XT)0);                ///< root namespace
-FV<Code*> dict = root.vt;             ///< global dictionary
-Code      *last;                      ///< last word cached
+Code      root((XT)0);                 ///< root namespace
+FV<Code*> dict = root.vt;              ///< global dictionary
+Code      *last;                       ///< last word cached
+FV<pair<FV<Code*>, Code*>> ns;         ///< namespace stack
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
@@ -25,10 +26,10 @@ Code      *last;                      ///< last word cached
         )
 #define BASE         ((U8*)&VAR(vm.id << 16))
 #define DICT_PUSH(c) (dict.push(last=(Code*)(c)))
-#define DICT_POP()   (delete dict.pop(), last=dict[-1])
+#define DICT_POP()   (dict.pop(), last=dict[-1])
 #define ADD_W(w)     (last->append((Code*)w))
-#define BTGT()       ((Bran*)dict[-2]->pf[-1])      /** branching target   */
-#define BRAN(p)      ((p).merge(last->pf))          /** add branching code */
+#define BTGT()       ((Bran*)dict[-2]->pf[-1])          /** branching target   */
+#define BRAN(p)      ((p).merge(last->pf))              /** add branching code */
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
 ///
@@ -245,9 +246,14 @@ const Code rom[] {               ///< Forth dictionary
     CODE("[",      --vm.compile),
     CODE("]",      vm.compile++),
     CODE(":",
+         ns.push({dict, last});
          DICT_PUSH(new Code(word()));   /// create new word
+         dict = dict[-1]->vt;
          vm.compile++),
-    IMMD(";", --vm.compile),
+    IMMD(";",
+         auto x = ns.pop();
+         dict = x.first; last = x.second;
+         --vm.compile),
     CODE("constant",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Lit(POP()));
