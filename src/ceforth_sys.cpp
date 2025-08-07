@@ -116,7 +116,7 @@ void ss_dump(VM &vm, bool forced) {       ///> display data stack and ok promt
     fout << "-> ok" << ENDL;
 }
 void _see(const Code &c, int dp) {       ///> disassemble a colon word
-    if (dp > 2) return;
+    if (dp > 3) return;
     auto pp = [](const string &s, const FV<Code*> &pf, int dp) { ///> recursive dump with indent
         int i = dp;
         if (dp && s != "\t") { fout << ENDL; }   ///> newline control
@@ -130,7 +130,7 @@ void _see(const Code &c, int dp) {       ///> disassemble a colon word
     string sn(c.name);
     
     if (c.is_str) sn = (c.token ? "s\" " : ".\" ") + sn + "\"";
-    pp(sn, c.pf, dp);
+    pp(sn, c.pf, dp);                            ///< inline code
     
     if (sn=="if")    {
         if (c.stage==1) pp("else", ((Bran&)c).p1, dp);
@@ -157,6 +157,8 @@ void _see(const Code &c, int dp) {       ///> disassemble a colon word
         pp("loop", nil, dp);
     }
     else pq(c.q);
+    
+    if (c.vt.size()) { pp(":", c.vt, dp+1); fout << ENDL; } ///< display methods
 }
 void see(const Code &c, int base) {
     if (c.xt) fout << "  ->{ " << c.desc << "; }";
