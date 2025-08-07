@@ -247,13 +247,15 @@ const Code rom[] {               ///< Forth dictionary
          nspace.push(last);             /// store current namespace
          dict = &last->vt;              /// new word's vt keeps new namespace
          vm.compile++;
+         for (int i=vm.compile; i>0; --i) printf(". ");
          printf("ns.size=%ld, ns[1]->vt.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[1]->vt.size(), nspace[0]->vt.size(), last, vm.compile)),
     IMMD(";",
          nspace.pop();                  /// restore outer namespace
-         dict = &nspace[-1]->vt;
-         last = (*dict)[-1]->pf[0];
+         last = nspace[-1];
+         dict = &last->vt;
          --vm.compile;
-         printf("ns.size=%ld, ns[0]->vt.size=%ld compile=%d\n", nspace.size(), nspace[0]->vt.size(), vm.compile)),
+         for (int i=vm.compile; i>0; --i) printf(". ");
+         printf("ns.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[0]->vt.size(), last, vm.compile)),
     IMMD("constant",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Lit(POP()));
