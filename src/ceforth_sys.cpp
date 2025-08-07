@@ -8,7 +8,7 @@
 #include "ceforth.h"
 using namespace std;
 
-extern FV<Code*> dict;
+extern FV<Code*> *dict;
 ///
 ///> I/O streaming interface
 ///
@@ -168,7 +168,7 @@ void words(int base) {                    ///> display word list
     const int WIDTH = 60;
     int x = 0;
     fout << setbase(16) << setfill('0');
-    for (auto w : dict) {
+    for (auto w : *dict) {
 #if CC_DEBUG > 1
         fout << setw(4) << w->token << "> "
              << (UFP)w << ' '
@@ -190,7 +190,7 @@ void words(int base) {                    ///> display word list
 void dict_dump(int base) {
     fout << setbase(16) << ENDL;
     int i=0;
-    for (auto c : dict) {
+    for (auto c : *dict) {
         fout << setfill('0') << setw(3) << i++
              << "> name=" << setw(8) << (UFP)c->name
              << ", xt="   << setw(8) << (UFP)c->xt
@@ -230,9 +230,9 @@ void _dump(Code *c, int dp) {
 }
 void mem_dump(IU w0, IU n, int base) {           ///> ' xx 1 dump
     fout << setbase(16) << setfill('0');
-    auto cx = dict.begin() + w0 + n;
-    for (auto c = dict.begin() + w0; c != cx; c++) {
-        fout << setw(4) << (int)(c - dict.begin()) << ": ";
+    auto cx = dict->begin() + w0 + n;
+    for (auto c = dict->begin() + w0; c != cx; c++) {
+        fout << setw(4) << (int)(c - dict->begin()) << ": ";
         if ((*c)->xt) fout << "built-in";        ///< primitives
         else          _dump(*c, 1);              ///< colon wordsa
         fout << ENDL;
