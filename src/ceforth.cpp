@@ -11,24 +11,24 @@ using namespace std;
 ///
 ///> Forth VM state variables
 ///
-Code      root((XT)0);                 ///< root namespace
-FV<Code*> dict = root.vt;              ///< global dictionary
-Code      *last;                       ///< last word cached
-FV<pair<FV<Code*>, Code*>> ns;         ///< namespace stack
+Code           root("forth", false);  ///< global dictionary
+FV<Code*>      nspace;                ///< namespace stack
+FV<Code*>      *dict = &root.vt;      ///< current namespace
+Code           *last;                 ///< last word cached
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
-#define VAR(i_w)     (*(dict[(int)((i_w) & 0xffff)]->pf[0]->q.data()+((i_w) >> 16)))
-#define STR(i_w)     (                                  \
-        EQ(i_w, UINT(-DU1))                             \
-        ? vm.pad.c_str()                                \
-        : dict[(i_w) & 0xffff]->pf[(i_w) >> 16]->name   \
+#define VAR(i_w)     (*((*dict)[(int)((i_w) & 0xffff)]->pf[0]->q.data()+((i_w) >> 16)))
+#define STR(i_w)     (                                      \
+        EQ(i_w, UINT(-DU1))                                 \
+        ? vm.pad.c_str()                                    \
+        : (*dict)[(i_w) & 0xffff]->pf[(i_w) >> 16]->name    \
         )
 #define BASE         ((U8*)&VAR(vm.id << 16))
-#define DICT_PUSH(c) (dict.push(last=(Code*)(c)))
-#define DICT_POP()   (dict.pop(), last=dict[-1])
+#define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
+#define DICT_POP()   (dict->pop(),last=(*dict)[-1])
 #define ADD_W(w)     (last->append((Code*)w))
-#define BTGT()       ((Bran*)dict[-2]->pf[-1])          /** branching target   */
+#define BTGT()       ((Bran*)(*dict)[-2]->pf[-1])          /** branching target   */
 #define BRAN(p)      ((p).merge(last->pf))              /** add branching code */
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
@@ -168,7 +168,6 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         if (!vm.compile++) DICT_PUSH(new Code(":sub"));
          ADD_W(new Bran(_if));
          DICT_PUSH(new Tmp())),
     IMMD("else",
@@ -185,9 +184,7 @@ const Code rom[] {               ///< Forth dictionary
          else {                                /// * else.{p1}.then, or
              BRAN(b->p1);                      /// * then.{p1}.next
              if (s==1) DICT_POP();             /// * if..else..then
-         }
-         if (!--vm.compile) { printf("compile=%d", vm.compile); }
-         ),
+         }),
     /// @}
     /// @defgroup Loops
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
@@ -246,14 +243,16 @@ const Code rom[] {               ///< Forth dictionary
     CODE("[",      --vm.compile),
     CODE("]",      vm.compile++),
     CODE(":",
-         ns.push({dict, last});
          DICT_PUSH(new Code(word()));   /// create new word
-         dict = dict[-1]->vt;
-         vm.compile++),
+         nspace.push(last);             /// store current namespace
+         dict = &last->vt;              /// new word's vt keeps new namespace
+         vm.compile++;
+         printf("ns.size=%ld, ns[1]->vt.size=%ld, ns[0]->vt.size=%ld compile=%d\n", nspace.size(), nspace[1]->vt.size(), nspace[0]->vt.size(), vm.compile)),
     IMMD(";",
-         auto x = ns.pop();
-         dict = x.first; last = x.second;
-         --vm.compile),
+         nspace.pop();                  /// restore outer namespace
+         dict = &nspace[-1]->vt;
+         --vm.compile;
+         printf("ns.size=%ld, compile=%d\n", nspace.size(), vm.compile)),
     CODE("constant",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Lit(POP()));
@@ -268,7 +267,7 @@ const Code rom[] {               ///< Forth dictionary
     /// @defgroup metacompiler
     /// @brief - dict is directly used, instead of shield by macros
     /// @{
-    CODE("exec",   dict[POPI()]->nest(vm)),           /// w --
+    CODE("exec",  (*dict)[POPI()]->nest(vm)),                    /// w --
     CODE("create",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Var(DU0));
@@ -282,10 +281,10 @@ const Code rom[] {               ///< Forth dictionary
          VAR(w->token) = POP()),                                 /// update value
     CODE("is",                                                   /// w -- 
          Code *w = (Code*)find(word()); if (!w) return;          /// defered word
-         IU i = POPI();  if (i >= (IU)dict.size()) return;       /// like this word
-         w->xt = dict[i]->xt;                                    /// if primitive
+         IU i = POPI();  if (i >= (IU)dict->size()) return;      /// like this word
+         w->xt = (*dict)[i]->xt;                                 /// if primitive
          w->pf.clear();                                          /// clear out pf
-         w->pf.merge(dict[i]->pf)),                              /// or colon word
+         w->pf.merge((*dict)[i]->pf)),                           /// or colon word
     /// @}
     /// @defgroup Memory Access ops
     /// @{
@@ -311,7 +310,7 @@ const Code rom[] {               ///< Forth dictionary
     /// @}
     CODE("task",                                                /// w -- task_id
          IU w = POPI();                                         ///< dictionary index
-         if (dict[w]->xt) pstr("  ?colon word only\n");
+         if ((*dict)[w]->xt) pstr("  ?colon word only\n");
          else PUSH(task_create(w))),                            /// create a task starting on pfa
     CODE("rank",    PUSH(vm.id)),                               /// ( -- n ) thread id
     CODE("start",   task_start(POPI())),                        /// ( task_id -- )
@@ -353,10 +352,10 @@ const Code rom[] {               ///< Forth dictionary
     CODE("forget",
          const Code *w = find(word()); if (!w) return;
          int   t = MAX((int)w->token, (int)find("boot")->token + 1);
-         for (int i=(int)dict.size(); i>t; i--) DICT_POP()),
+         for (int i=(int)dict->size(); i>t; i--) DICT_POP()),
     CODE("boot",
          int t = find("boot")->token + 1;
-         for (int i=(int)dict.size(); i>t; i--) DICT_POP())
+         for (int i=(int)dict->size(); i>t; i--) DICT_POP())
 };
 ///====================================================================
 ///
@@ -369,7 +368,7 @@ Code::Code(const char *s, bool n) {  ///< new colon word
     name  = w ? w->name : (new string(s))->c_str();       /// * copy the name
     desc  = "";
     xt    = w ? w->xt : NULL;
-    token = n ? dict.size() : 0;
+    token = n ? dict->size() : 0;
     if (n && w) pstr("reDef?");          /// * warn word redefined
 }
 ///
@@ -435,7 +434,7 @@ void _loop(VM &vm, Code &c) {                  ///> do..loop
 }
 void _does(VM &vm, Code &c) {
     bool hit = false;
-    for (auto w : dict[c.token]->pf) {
+    for (auto w : (*dict)[c.token]->pf) {
         if (hit) ADD_W(w);                     /// copy rest of pf
         if (STRCMP(w->name, "does>")==0) hit = true;
     }
@@ -445,10 +444,26 @@ void _does(VM &vm, Code &c) {
 ///
 ///> Forth outer interpreter
 ///
-const Code *find(const char *s) {              ///> scan dictionary, last to first
-    for (int i = (int)dict.size() - 1; i >= 0; --i) {
-        if (STRCMP(s, dict[i]->name)==0) return dict[i];
+const Code* find_ns(const char *ns) {
+    printf("find_ns %s ns.size=%ld\n", ns, nspace.size());
+    for (int i = 0; i < (int)nspace.size(); i++) {
+        printf("  ns[%d]=%s\n", i, nspace[i]->name);
+        if (STRCMP(ns, nspace[i]->name)==0) return nspace[i];
     }
+    return NULL;                              ///< global namespace
+}
+const Code *find(const char *s) {              ///> scan dictionary, last to first
+    for (int j = nspace.size() - 1; j >= 0; --j) {
+        FV<Code*> &d = nspace[j]->vt;
+        printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
+        for (int i = (int)d.size() - 1; i >= 0; --i) {
+            if (STRCMP(s, d[i]->name)==0) {
+                printf("[%d,%d] %s\n", j, i, d[i]->name);
+                return d[i];
+            }
+        }
+    }
+    printf("not found\n");
     return NULL;                               /// * word not found
 }
 
@@ -492,14 +507,24 @@ void forth_core(VM &vm, const char *idiom) {
 void forth_init() {
     static bool init = false;         ///< singleton
     if (init) return;
-    
+
     const int sz = (int)(sizeof(rom))/(sizeof(Code));
-    dict.reserve(sz * 2);             /// * pre-allocate vector
+    dict->reserve(sz * 2);            /// * pre-allocate vector
 
     for (const Code &c : rom) {       /// * populate the dictionary
         DICT_PUSH(&c);                /// * ROM => RAM
     }
+    nspace.push(&root);               ///< initialize namespace stack
+/*
+    const Code *ns = find_ns();
+    printf("=> ns=%s size=%ld\n", ns ? ns->name : "not found", ns ? ns->vt.size() : 0);
 
+    ns = find_ns("root");
+    printf("=> ns=%s size=%ld\n", ns ? ns->name : "not found", ns ? ns->vt.size() : 0);
+
+    const Code *c = find("boot");
+    printf("c=%s token=%d\n", c ? c->name : "not found", c ? c->token : 0);
+*/
     uvar_init();                      /// * initialize user area
     t_pool_init();                    /// * initialize thread pool
     VM &vm0   = vm_get(0);            ///< main thread
@@ -508,7 +533,7 @@ void forth_init() {
 
 void forth_teardown() {
     t_pool_stop();
-    dict.clear();
+    dict->clear();
 }
 
 int forth_vm(const char *line, void(*hook)(int, const char*)) {
