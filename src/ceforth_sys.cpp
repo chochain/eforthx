@@ -158,7 +158,7 @@ void _see(const Code &c, int dp) {       ///> disassemble a colon word
     }
     else pq(c.q);
     
-    if (c.vt.size()) { pp(":", c.vt, dp+1); fout << ENDL; } ///< display methods
+    if (c.vt.size()) pp("", c.vt, dp);    ///< display methods
 }
 void see(const Code &c, int base) {
     if (c.xt) fout << "  ->{ " << c.desc << "; }";
