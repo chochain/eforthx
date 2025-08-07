@@ -240,9 +240,9 @@ const Code rom[] {               ///< Forth dictionary
     /// @}
     /// @defgrouop Compiler ops
     /// @{
-    CODE("[",      --vm.compile),
-    CODE("]",      vm.compile++),
-    CODE(":",
+    IMMD("[",      --vm.compile),
+    IMMD("]",      vm.compile++),
+    IMMD(":",
          DICT_PUSH(new Code(word()));   /// create new word
          nspace.push(last);             /// store current namespace
          dict = &last->vt;              /// new word's vt keeps new namespace
@@ -252,23 +252,23 @@ const Code rom[] {               ///< Forth dictionary
          nspace.pop();                  /// restore outer namespace
          dict = &nspace[-1]->vt;
          --vm.compile;
-         printf("ns.size=%ld, compile=%d\n", nspace.size(), vm.compile)),
-    CODE("constant",
+         printf("ns.size=%ld, ns[0]->vt.size=%ld compile=%d\n", nspace.size(), nspace[0]->vt.size(), vm.compile)),
+    IMMD("constant",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Lit(POP()));
          w->pf[0]->token = w->token),
-    CODE("variable",
+    IMMD("variable",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Var(DU0));
          w->pf[0]->token = w->token),
-    CODE("immediate", last->immd = 1),
+    IMMD("immediate", last->immd = 1),
     CODE("exit",   UNNEST()),           /// -- (exit from word)
     /// @}
     /// @defgroup metacompiler
     /// @brief - dict is directly used, instead of shield by macros
     /// @{
     CODE("exec",  (*dict)[POPI()]->nest(vm)),                    /// w --
-    CODE("create",
+    IMMD("create",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Var(DU0));
          w->pf[0]->token = w->token;
@@ -331,7 +331,7 @@ const Code rom[] {               ///< Forth dictionary
          const Code *w = find(word()); if (w) PUSH(w->token)),
     CODE(".s",      ss_dump(vm, true)),                         /// dump parameter stack
     CODE("words",   words(*vm.base)),                           /// display word lists
-    CODE("see",
+    IMMD("see",
          const Code *w = find(word());
          if (w) see(*w, *vm.base);
          dot(CR)),
@@ -349,11 +349,11 @@ const Code rom[] {               ///< Forth dictionary
     CODE("clock",   PUSH(millis())),                            /// get system clock in msec
     CODE("rnd",     PUSH(RND())),                               /// get a random number
     CODE("ms",      IU i = POPI(); delay(i)),                   /// n -- delay n msec
-    CODE("forget",
+    IMMD("forget",
          const Code *w = find(word()); if (!w) return;
          int   t = MAX((int)w->token, (int)find("boot")->token + 1);
          for (int i=(int)dict->size(); i>t; i--) DICT_POP()),
-    CODE("boot",
+    IMMD("boot",
          int t = find("boot")->token + 1;
          for (int i=(int)dict->size(); i>t; i--) DICT_POP())
 };
@@ -369,6 +369,7 @@ Code::Code(const char *s, bool n) {  ///< new colon word
     desc  = "";
     xt    = w ? w->xt : NULL;
     token = n ? dict->size() : 0;
+    printf(" => new Code(%s) token=%d\n", s, token);
     if (n && w) pstr("reDef?");          /// * warn word redefined
 }
 ///
@@ -458,12 +459,12 @@ const Code *find(const char *s) {              ///> scan dictionary, last to fir
         printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
         for (int i = (int)d.size() - 1; i >= 0; --i) {
             if (STRCMP(s, d[i]->name)==0) {
-                printf("[%d,%d] %s\n", j, i, d[i]->name);
+                printf("[%d,%d] %s ", j, i, d[i]->name);
                 return d[i];
             }
         }
     }
-    printf("not found\n");
+    printf("not found ");
     return NULL;                               /// * word not found
 }
 
@@ -490,12 +491,14 @@ DU parse_number(const char *s, int b) {
 void forth_core(VM &vm, const char *idiom) {
     Code *w = (Code*)find(idiom);     ///< find the word named idiom in dict
     if (w) {                          /// * word found?
+        printf("=> w->name=%s\n", w->name);
         if (vm.compile && !w->immd)   /// * are we compiling new word?
             ADD_W(w);                 /// * append word ptr to it
         else w->nest(vm);             /// * execute forth word
         return;
     }
     DU  n = parse_number(idiom, *vm.base);  ///< try as a number, throw exception
+    printf("=> lit %d\n", n);
     if (vm.compile)                   /// * are we compiling new word?
         ADD_W(new Lit(n));            /// * append numeric literal to it
     else PUSH(n);                     /// * add value to data stack
