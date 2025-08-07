@@ -247,10 +247,11 @@ const Code rom[] {               ///< Forth dictionary
          nspace.push(last);             /// store current namespace
          dict = &last->vt;              /// new word's vt keeps new namespace
          vm.compile++;
-         printf("ns.size=%ld, ns[1]->vt.size=%ld, ns[0]->vt.size=%ld compile=%d\n", nspace.size(), nspace[1]->vt.size(), nspace[0]->vt.size(), vm.compile)),
+         printf("ns.size=%ld, ns[1]->vt.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[1]->vt.size(), nspace[0]->vt.size(), last, vm.compile)),
     IMMD(";",
          nspace.pop();                  /// restore outer namespace
          dict = &nspace[-1]->vt;
+         last = (*dict)[-1]->pf[0];
          --vm.compile;
          printf("ns.size=%ld, ns[0]->vt.size=%ld compile=%d\n", nspace.size(), nspace[0]->vt.size(), vm.compile)),
     IMMD("constant",
@@ -353,7 +354,7 @@ const Code rom[] {               ///< Forth dictionary
          const Code *w = find(word()); if (!w) return;
          int   t = MAX((int)w->token, (int)find("boot")->token + 1);
          for (int i=(int)dict->size(); i>t; i--) DICT_POP()),
-    IMMD("boot",
+    CODE("boot",
          int t = find("boot")->token + 1;
          for (int i=(int)dict->size(); i>t; i--) DICT_POP())
 };
