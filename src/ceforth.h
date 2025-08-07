@@ -42,7 +42,7 @@ struct FV : public vector<T> {      ///< our super-vector class
         if constexpr(is_pointer<T>::value) {
             for (T t : *this)
                 if (t->ref>1) printf("%s[%d--]\n", t->name, t->ref--);
-                else if (t != nullptr) { delete t; t = nullptr; }
+//                else if (t != nullptr) { delete t; t = nullptr; }
         }
     }
     void push(T t) {
@@ -141,7 +141,7 @@ struct Code  {                     ///> Colon words
     };
     Code(const char *s, const char *d, XT fp, U32 a);  ///> primitive
     Code(const char *s, bool n=true);                  ///> colon, n=new word
-    Code(XT fp) : Code("lit", "", fp, 0) {}               ///> sub-classes
+    Code(XT fp) : Code("", "", fp, 0) {}               ///> sub-classes
     ~Code() {
         if (xt) return;
         printf("%s.pf,q,vt[%ld,%ld,%ld].clear\n", name, pf.size(),q.size(),vt.size());
