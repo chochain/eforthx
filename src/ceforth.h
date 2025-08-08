@@ -40,18 +40,19 @@ struct FV : public vector<T> {      ///< our super-vector class
     }
     ~FV() {                         ///< free pointed elements
         if constexpr(is_pointer<T>::value) {
-            for (T t : *this)
-                if (t->ref>1) printf("%s[%d--]\n", t->name, t->ref--);
+//            for (T t : *this) {
+//                if (t->ref>1) printf("%s[%d--]\n", t->name, t->ref--);
 //                else if (t != nullptr) { delete t; t = nullptr; }
+//            }
         }
     }
     void push(T t) {
-        if constexpr(is_pointer<T>::value) printf("%s[%d++]\n", t->name, t->ref++);
+//        if constexpr(is_pointer<T>::value) printf("%s[%d++]\n", t->name, t->ref++);
         this->push_back(t);
     }
     T    pop()     {
         T t = this->back();
-        if constexpr(is_pointer<T>::value) printf("%s[%d--]\n", t->name, t->ref--);
+//        if constexpr(is_pointer<T>::value) printf("%s[%d--]\n", t->name, t->ref--);
         this->pop_back();
         return t;
     }
