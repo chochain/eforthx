@@ -377,6 +377,31 @@ So, what **cachegrind** said for **100M loop** tight loops and **chacha.fs** a C
     
 Apparently, grown ~30% in all aspects. I think because having branching primitives, i.e. **_if/_else/_then**, **for/next**, in C++ prevent the extra fetch of VM branches. Sort of the difference between having hardware and software branchers. However, my gut feeling is the difference shouldn't be so dramatic especially with the recursive nest(). More research on this...
 
+## TODO - namespace
+### src
+Code::              - act as the container of namespace
++    FV<Code*> vt[] - virtual table for current namespace
+    
+FV<Code*> nspace - namespace stack
+
+### 50x
+Code Node
+    +------+-----+-----+------+----------+-----------------+
+    | LINK | PFA | NSA | LAST | name-str | code/parameters |
+    +------+-----+-----+------+----------+-----------------+
+
+     0          0          0    <= NSA (namespace address)
+      \          \          \
+... <--[ W1 ] <-- [ W2 ] <-- [ W3 ] <-- LAST (word linked-list)
+             \          \          \
+              \         NSA         [ A ] <-- [ B ] <-- [ C ] <-- W3.LAST
+              NSA         \
+                \          [ A ] <-- [ B ] <-- [ X ] <-- W2.LAST
+                 \
+                  [ A ] <-- [ B ] <-- W1.LAST
+                                 \
+                                  [ A ] <-- [ X ] <-- [ Y ] <-- W1B.LAST
+                                  
 ## References
     + perf   - [multithreaded](https://easyperf.net/blog/2019/10/05/Performance-Analysis-Of-MT-apps)
     + coding -
