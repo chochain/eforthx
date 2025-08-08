@@ -110,13 +110,19 @@ void ss_dump(VM &vm, bool forced) {       ///> display data stack and ok promt
         if (dec && v < DU0) buf[--i]='-';
         return &buf[i];
     };
-    SS.push(TOS);
-    for (DU v : SS) { fout << rdx(v, *vm.base) << ' '; }
-    TOS = SS.pop();
-    fout << "-> ok" << ENDL;
+    if (vm.compile) {
+        for (int i=0; i < vm.compile; i++) fout << "> ";
+    }
+    else {
+        SS.push(TOS);
+        for (DU v : SS) { fout << rdx(v, *vm.base) << ' '; }
+        TOS = SS.pop();
+        fout << "ok ";
+    }
+    fout << FLUSH;
 }
-void _see(const Code &c, int dp) {       ///> disassemble a colon word
-    if (dp > 3) return;
+void _see(const Code &c, int dp) {               ///< disassemble a colon word
+    if (dp > 1) return;                          /// * non-recursive
     auto pp = [](const string &s, const FV<Code*> &pf, int dp) { ///> recursive dump with indent
         int i = dp;
         if (dp && s != "\t") { fout << ENDL; }   ///> newline control
@@ -126,8 +132,15 @@ void _see(const Code &c, int dp) {       ///> disassemble a colon word
     auto pq = [](const FV<DU> &q) {
         for (DU i : q) fout << i << (q.size() > 1 ? " " : "");
     };
+    auto pm = [](const FV<Code*> &vt, int dp) {  ///> recursive dump with indent
+        for (auto w : vt) {
+            fout << ENDL;
+            for (int i=0; i<dp; i++) fout << "  "; ///> indentation control
+            fout << ":" << w->name;
+        }
+    };
     const FV<Code*> nil = {};
-    string sn(c.name);
+    string sn(c.name); sn += " "+c.token;
     
     if (c.is_str) sn = (c.token ? "s\" " : ".\" ") + sn + "\"";
     pp(sn, c.pf, dp);                            ///< inline code
@@ -158,7 +171,7 @@ void _see(const Code &c, int dp) {       ///> disassemble a colon word
     }
     else pq(c.q);
     
-    if (c.vt.size()) pp("", c.vt, dp);    ///< display methods
+    pm(c.vt, dp+1);                       ///< display methods
 }
 void see(const Code &c, int base) {
     if (c.xt) fout << "  ->{ " << c.desc << "; }";
