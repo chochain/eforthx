@@ -26,10 +26,10 @@ Code           *last;                 ///< last word cached
         )
 #define BASE         ((U8*)&VAR(vm.id << 16))
 #define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
-#define DICT_POP()   (dict->pop(),last=(*dict)[-1])
+#define DICT_POP()   (delete dict->pop(),last=(*dict)[-1])
 #define ADD_W(w)     (last->append((Code*)w))
-#define BTGT()       ((Bran*)(*dict)[-2]->pf[-1])          /** branching target   */
-#define BRAN(p)      ((p).merge(last->pf))              /** add branching code */
+#define BTGT()       ((Bran*)(nspace[-2]->vt[-1]->pf[-1]))      /** branching target   */
+#define BRAN(p)      ((p).merge(last->pf))                      /** add branching code */
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
 ///
@@ -168,15 +168,21 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         ADD_W(new Bran(_if));
-         DICT_PUSH(new Tmp())),
+         Code *b = new Bran(_if);
+         Code *t = new Tmp();
+         ADD_W(b);
+         DICT_PUSH(t);
+         printf("if b=%p t=%p last=%p ", b, t, last);
+        ),
     IMMD("else",
          Bran *b = BTGT();
+         printf("else b=%p last=%p ", b, last);
          BRAN(b->pf);
          b->stage = 1),
     IMMD("then",
          Bran *b = BTGT();
          int  s  = b->stage;                   ///< branching state
+         printf("then b=%p last=%p stage=%d", b, last, s);
          if (s==0) {
              BRAN(b->pf);                      /// * if.{pf}.then
              DICT_POP();
