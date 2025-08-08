@@ -246,20 +246,19 @@ const Code rom[] {               ///< Forth dictionary
          DICT_PUSH(new Code(word()));   /// create new word
          nspace.push(last);             /// store current namespace
          dict = &last->vt;              /// new word's vt keeps new namespace
-         vm.compile++;
-         for (int i=vm.compile; i>0; --i) printf(". ");
-         printf("ns.size=%ld, ns[1]->vt.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[1]->vt.size(), nspace[0]->vt.size(), last, vm.compile)),
+//         for (int i=vm.compile; i>0; --i) printf(". ");
+//         printf("ns.size=%ld, ns[1]->vt.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[1]->vt.size(), nspace[0]->vt.size(), last, vm.compile);
+         vm.compile++),
     IMMD(";",
          nspace.pop();                  /// restore outer namespace
          last = nspace[-1];
          dict = &last->vt;
-         --vm.compile;
-         for (int i=vm.compile; i>0; --i) printf(". ");
-         printf("ns.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[0]->vt.size(), last, vm.compile)),
+//         for (int i=vm.compile; i>0; --i) printf(". ");
+//         printf("ns.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[0]->vt.size(), last, vm.compile);
+         --vm.compile),
     IMMD("constant",
          DICT_PUSH(new Code(word()));
-         Code *w = ADD_W(new Lit(POP()));
-         w->pf[0]->token = w->token),
+         ADD_W(new Lit(POP()))),
     IMMD("variable",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Var(DU0));
@@ -285,9 +284,9 @@ const Code rom[] {               ///< Forth dictionary
     CODE("is",                                                   /// w -- 
          Code *w = (Code*)find(word()); if (!w) return;          /// defered word
          IU i = POPI();  if (i >= (IU)dict->size()) return;      /// like this word
-         w->xt = (*dict)[i]->xt;                                 /// if primitive
          w->pf.clear();                                          /// clear out pf
-         w->pf.merge((*dict)[i]->pf)),                           /// or colon word
+         w->pf.merge((*dict)[i]->pf);                            /// or colon word
+         w->xt = (*dict)[i]->xt),                                /// if primitive
     /// @}
     /// @defgroup Memory Access ops
     /// @{
@@ -366,14 +365,14 @@ const Code rom[] {               ///< Forth dictionary
 ///
 Code::Code(const char *s, const char *d, XT fp, U32 a)    ///> primitive word
     : name(s), desc(d), xt(fp), attr(a) {}
-Code::Code(const char *s, bool n) {  ///< new colon word
+Code::Code(const char *s, bool n) {                       ///< new colon word
     const Code *w = find(s);                              /// * scan the dictionary
     name  = w ? w->name : (new string(s))->c_str();       /// * copy the name
     desc  = "";
     xt    = w ? w->xt : NULL;
     token = n ? dict->size() : 0;
-    printf(" => new Code(%s) token=%d\n", s, token);
-    if (n && w) pstr("reDef?");          /// * warn word redefined
+//    printf(" => new Code(%s) token=%d\n", s, token);
+    if (n && w) pstr("reDef?");                           /// * warn word redefined
 }
 ///
 ///> Forth inner interpreter
@@ -449,25 +448,32 @@ void _does(VM &vm, Code &c) {
 ///> Forth outer interpreter
 ///
 const Code* find_ns(const char *ns) {
-    printf("find_ns %s ns.size=%ld\n", ns, nspace.size());
+    auto ncolon = [](char *p) {
+        int i = 0;
+        for (i=0; (p=strchr(p, ':'))!=NULL; i++, p++);
+        return i;
+    };
+    int n = ncolon((char*)ns);
+    printf("ncolon=%d, find_ns %s ns.size=%ld\n", n, ns, nspace.size());
     for (int i = 0; i < (int)nspace.size(); i++) {
         printf("  ns[%d]=%s\n", i, nspace[i]->name);
         if (STRCMP(ns, nspace[i]->name)==0) return nspace[i];
     }
-    return NULL;                              ///< global namespace
+    return NULL;                               ///< global namespace
 }
 const Code *find(const char *s) {              ///> scan dictionary, last to first
-    for (int j = nspace.size() - 1; j >= 0; --j) {
+    if (strchr(s, ':') > s) return find_ns(s);     ///< search by namespace
+    for (int j = nspace.size() - 1; j >= 0; --j) { ///< search from leaf
         FV<Code*> &d = nspace[j]->vt;
-        printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
+//        printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
         for (int i = (int)d.size() - 1; i >= 0; --i) {
             if (STRCMP(s, d[i]->name)==0) {
-                printf("[%d,%d] %s ", j, i, d[i]->name);
+//                printf("[%d,%d] %s ", j, i, d[i]->name);
                 return d[i];
             }
         }
     }
-    printf("not found ");
+//    printf("not found ");
     return NULL;                               /// * word not found
 }
 
@@ -494,14 +500,14 @@ DU parse_number(const char *s, int b) {
 void forth_core(VM &vm, const char *idiom) {
     Code *w = (Code*)find(idiom);     ///< find the word named idiom in dict
     if (w) {                          /// * word found?
-        printf("=> w->name=%s\n", w->name);
+//        printf("=> w->name=%s\n", w->name);
         if (vm.compile && !w->immd)   /// * are we compiling new word?
             ADD_W(w);                 /// * append word ptr to it
         else w->nest(vm);             /// * execute forth word
         return;
     }
     DU  n = parse_number(idiom, *vm.base);  ///< try as a number, throw exception
-    printf("=> lit %d\n", n);
+//    printf("=> lit %d\n", n);
     if (vm.compile)                   /// * are we compiling new word?
         ADD_W(new Lit(n));            /// * append numeric literal to it
     else PUSH(n);                     /// * add value to data stack
@@ -560,7 +566,7 @@ int forth_vm(const char *line, void(*hook)(int, const char*)) {
             scan('\n');               /// * exhaust input line
         }
     }
-    if (!vm.compile) ss_dump(vm);
+    ss_dump(vm);
     
     return vm.state==STOP;
 }
