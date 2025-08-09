@@ -36,23 +36,26 @@ typedef  condition_variable COND_VAR;
 template<typename T>
 struct FV : public vector<T> {      ///< our super-vector class
     FV *merge(FV<T> &v) {
-        this->insert(this->end(), v.begin(), v.end()); v.clear(); return this;
+        this->insert(this->end(), v.begin(), v.end());
+        printf("..clearing %p..", this);
+        v.clear(); return this;
     }
     ~FV() {                         ///< free pointed elements
         if constexpr(is_pointer<T>::value) {
-//            for (T t : *this) {
-//                if (t->ref>1) printf("%s[%d--]\n", t->name, t->ref--);
+            printf("_~[%ld]_", this->size());
+            for (T t : *this) {
+                if (t->ref>1) printf("%s.ref[%d--]\n", t->name, t->ref--);
 //                else if (t != nullptr) { delete t; t = nullptr; }
-//            }
+            }
         }
     }
     void push(T t) {
-//        if constexpr(is_pointer<T>::value) printf("%s[%d++]\n", t->name, t->ref++);
+        if constexpr(is_pointer<T>::value) printf("%s[%d++]\n", t->name, t->ref++);
         this->push_back(t);
     }
     T    pop()     {
         T t = this->back();
-//        if constexpr(is_pointer<T>::value) printf("%s[%d--]\n", t->name, t->ref--);
+        if constexpr(is_pointer<T>::value) printf("%s[%d--]\n", t->name, t->ref--);
         this->pop_back();
         return t;
     }
@@ -143,15 +146,7 @@ struct Code  {                     ///> Colon words
     Code(const char *s, const char *d, XT fp, U32 a);  ///> primitive
     Code(const char *s, bool n=true);                  ///> colon, n=new word
     Code(XT fp) : Code("", "", fp, 0) {}               ///> sub-classes
-    ~Code() {
-        if (xt) return;
-        printf("%s.pf,q,vt[%ld,%ld,%ld].clear\n", name, pf.size(),q.size(),vt.size());
-        if (ref == 1) {
-            pf.clear(); pf.shrink_to_fit();
-            q.clear();  q.shrink_to_fit();
-            vt.clear(); vt.shrink_to_fit();
-        }
-    } ///> delete name of colon word
+    ~Code() { printf("_~%s_", name); }
     Code *append(Code *w) { pf.push(w); return this; } ///> add token
     void nest(VM &vm);                                 ///> inner interpreter
 };
@@ -183,7 +178,7 @@ void   _does(VM &vm, Code &c);       ///< does>
 ///
 ///> polymorphic constructors
 ///
-struct Tmp : Code { Tmp()     : Code((XT)NULL) {} };
+struct Tmp : Code { Tmp()     : Code((XT)NULL) { name="tmp"; } };
 struct Lit : Code { Lit(DU d) : Code(_lit) { q.push(d); } };
 struct Var : Code { Var(DU d) : Code(_var) { q.push(d); } };
 struct Str : Code {
