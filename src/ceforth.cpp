@@ -37,12 +37,13 @@ Tmp            noname;
 
 void dstat(const char *prefix, VM &vm) {
     for (int i=vm.compile; i>0; --i) printf(">> ");
-    size_t sz = nspace.size();
-    printf(
-        "%s ns.sz=[%ld,%ld] dict=%s.vt[%ld]=%p last=%s.pf[%ld]=%p compile=%d\n",
-        prefix, nspace[0]->vt.size(), sz > 1 ? nspace[1]->vt.size() : -1, 
-        nspace[vm.compile]->name, dict->size(), dict,
-        last->name, last->pf.size(), last, vm.compile);
+    int sz = (int)nspace.size();
+    printf("%s ns.sz=%d ", prefix, sz);
+    for (int i=0; i<sz; i++) {
+        Code *ns = nspace[i];
+        printf("[%d]%s.vt[%ld] ", i, ns->name, ns->vt.size());
+    }
+    printf("last=%s.pf[%ld] compile=%d\n", last->name, last->pf.size(), vm.compile);
 }
 ///
 ///> Forth Dictionary Assembler
@@ -265,7 +266,7 @@ const Code rom[] {               ///< Forth dictionary
          dstat("before ;", vm);
          nspace.pop();                  /// restore outer namespace
          dict = &nspace[-1]->vt;
-         last = (*dict)[-1];            /// point to last word
+         last = nspace[-vm.compile]->vt[-1];
          --vm.compile;
          dstat("after ;", vm)),
     IMMD("constant",
