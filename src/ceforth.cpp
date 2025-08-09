@@ -397,7 +397,7 @@ void Code::nest(VM &vm) {
     for (int i=0; i < (int)pf.size(); i++) {
         try         { pf[i]->nest(vm); } /// * execute recursively
         catch (...) { break; }
-        printf("%-3x => RS=%d, SS=%d %s", i, (int)vm.rs.size(), (int)vm.ss.size(), pf[i]->name);
+//        printf("%-3x => RS=%d, SS=%d %s", i, (int)vm.rs.size(), (int)vm.ss.size(), pf[i]->name);
     }
 }
 ///====================================================================
@@ -480,12 +480,12 @@ const Code *find(const char *s) {              ///> scan dictionary, last to fir
         printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
         for (int i = (int)d.size() - 1; i >= 0; --i) {
             if (STRCMP(s, d[i]->name)==0) {
-                printf("[%d,%d] %s ", j, i, d[i]->name);
+                printf("[%d,%d] %s\n", j, i, d[i]->name);
                 return d[i];
             }
         }
     }
-    printf("not found ");
+    printf("not found\n");
     return NULL;                               /// * word not found
 }
 
@@ -512,22 +512,14 @@ DU parse_number(const char *s, int b) {
 void forth_core(VM &vm, const char *idiom) {
     Code *w = (Code*)find(idiom);     ///< find the word named idiom in dict
     if (w) {                          /// * word found?
-        printf("=> w=%s\n", w->name);
-        if (vm.compile && !w->immd) {  /// * are we compiling new word?
-            dstat("before ADD_W+w", vm);
+        if (vm.compile && !w->immd)   /// * are we compiling new word?
             ADD_W(w);                 /// * append word ptr to it
-            dstat("after ADD_W+w", vm);
-        }
         else w->nest(vm);             /// * execute forth word
         return;
     }
     DU  n = parse_number(idiom, *vm.base);  ///< try as a number, throw exception
-    printf("=> lit %d\n", n);
-    if (vm.compile) {                  /// * are we compiling new word?
-        dstat("before ADD_W+lit", vm);
+    if (vm.compile)                   /// * are we compiling new word?
         ADD_W(new Lit(n));            /// * append numeric literal to it
-        dstat("after ADD_W+lit", vm);
-    }
     else PUSH(n);                     /// * add value to data stack
 }
 ///====================================================================
