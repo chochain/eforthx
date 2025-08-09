@@ -15,6 +15,7 @@ Code           root("forth", false);  ///< global dictionary
 FV<Code*>      nspace;                ///< namespace stack
 FV<Code*>      *dict = &root.vt;      ///< current namespace
 Code           *last;                 ///< last word cached
+Tmp            noname;
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
@@ -30,8 +31,19 @@ Code           *last;                 ///< last word cached
 #define ADD_W(w)     (last->append((Code*)w))
 #define BTGT()       ((Bran*)(nspace[-2]->vt[-1]->pf[-1]))      /** branching target   */
 #define BRAN(p)      ((p).merge(last->pf))                      /** add branching code */
+#define BEND()       (last=(nspace[-2]->vt[-1]))
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
+
+void dstat(const char *prefix, VM &vm) {
+    for (int i=vm.compile; i>0; --i) printf(">> ");
+    size_t sz = nspace.size();
+    printf(
+        "%s ns.sz=[%ld,%ld] dict=%s.vt[%ld]=%p last=%s.pf[%ld]=%p compile=%d\n",
+        prefix, nspace[0]->vt.size(), sz > 1 ? nspace[1]->vt.size() : -1, 
+        nspace[vm.compile]->name, dict->size(), dict,
+        last->name, last->pf.size(), last, vm.compile);
+}
 ///
 ///> Forth Dictionary Assembler
 /// @note:
@@ -168,28 +180,22 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         Code *b = new Bran(_if);
-         Code *t = new Tmp();
-         ADD_W(b);
-         DICT_PUSH(t);
-         printf("if b=%p t=%p last=%p ", b, t, last);
-        ),
+         ADD_W(new Bran(_if));
+         last = &noname),                      ///< keep temp branching code
     IMMD("else",
          Bran *b = BTGT();
-         printf("else b=%p last=%p ", b, last);
          BRAN(b->pf);
          b->stage = 1),
     IMMD("then",
          Bran *b = BTGT();
          int  s  = b->stage;                   ///< branching state
-         printf("then b=%p last=%p stage=%d", b, last, s);
          if (s==0) {
              BRAN(b->pf);                      /// * if.{pf}.then
-             DICT_POP();
+             BEND();
          }
          else {                                /// * else.{p1}.then, or
              BRAN(b->p1);                      /// * then.{p1}.next
-             if (s==1) DICT_POP();             /// * if..else..then
+             if (s==1) BEND();                 /// * if..else..then
          }),
     /// @}
     /// @defgroup Loops
@@ -197,21 +203,21 @@ const Code rom[] {               ///< Forth dictionary
     /// @{
     IMMD("begin",
          ADD_W(new Bran(_begin));
-         DICT_PUSH(new Tmp())),                /// as branch target
+         last = &noname),                      /// as branch target
     IMMD("while",
          Bran *b = BTGT();
          BRAN(b->pf);                          /// * begin.{pf}.f.while
          b->stage = 2),
     IMMD("repeat",
          Bran *b = BTGT();
-         BRAN(b->p1); DICT_POP()),             /// * while.{p1}.repeat
+         BRAN(b->p1); BEND()),                 /// * while.{p1}.repeat
     IMMD("again",
          Bran *b = BTGT();
-         BRAN(b->pf); DICT_POP();              /// * begin.{pf}.again
+         BRAN(b->pf); BEND();                  /// * begin.{pf}.again
          b->stage = 1),
     IMMD("until",
          Bran *b = BTGT();
-         BRAN(b->pf); DICT_POP()),             /// * begin.{pf}.f.until
+         BRAN(b->pf); BEND()),                 /// * begin.{pf}.f.until
     /// @}
     /// @defgrouop FOR loops
     /// @brief  - for...next, for...aft...then...next
@@ -219,7 +225,7 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("for",
          ADD_W(new Bran(_tor));
          ADD_W(new Bran(_for));
-         DICT_PUSH(new Tmp())),                /// as branch target
+         last = &noname),                      /// 
     IMMD("aft",
          Bran *b = BTGT();
          BRAN(b->pf);                          /// * for.{pf}.aft
@@ -227,7 +233,7 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("next",
          Bran *b = BTGT();
          BRAN(b->stage==0 ? b->pf : b->p2);    /// * for.{pf}.next, or
-         DICT_POP()),                          /// * then.{p2}.next
+         BEND()),                              /// * then.{p2}.next
     /// @}
     /// @defgrouop DO loops
     /// @brief  - do...loop, do..leave..loop
@@ -235,33 +241,33 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("do",
          ADD_W(new Bran(_tor2));               ///< ( limit first -- )
          ADD_W(new Bran(_loop));
-         DICT_PUSH(new Tmp())),
+         last = &noname),
     CODE("i",      PUSH(RS[-1])),
     CODE("leave",
          RS.pop(); RS.pop(); UNNEST()), /// * exit loop
     IMMD("loop",
          Bran *b = BTGT();
          BRAN(b->pf);                   /// * do.{pf}.loop
-         DICT_POP()),
+         BEND()),
     /// @}
     /// @defgrouop Compiler ops
     /// @{
     IMMD("[",      --vm.compile),
     IMMD("]",      vm.compile++),
     IMMD(":",
+         dstat("before : ",  vm);
          DICT_PUSH(new Code(word()));   /// create new word
          nspace.push(last);             /// store current namespace
          dict = &last->vt;              /// new word's vt keeps new namespace
-//         for (int i=vm.compile; i>0; --i) printf(". ");
-//         printf("ns.size=%ld, ns[1]->vt.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[1]->vt.size(), nspace[0]->vt.size(), last, vm.compile);
-         vm.compile++),
+         vm.compile++;
+         dstat("after : ",  vm)),
     IMMD(";",
+         dstat("before ;", vm);
          nspace.pop();                  /// restore outer namespace
-         last = nspace[-1];
-         dict = &last->vt;
-//         for (int i=vm.compile; i>0; --i) printf(". ");
-//         printf("ns.size=%ld, ns[0]->vt.size=%ld last=%p compile=%d\n", nspace.size(), nspace[0]->vt.size(), last, vm.compile);
-         --vm.compile),
+         dict = &nspace[-1]->vt;
+         last = (*dict)[-1];            /// point to last word
+         --vm.compile;
+         dstat("after ;", vm)),
     IMMD("constant",
          DICT_PUSH(new Code(word()));
          ADD_W(new Lit(POP()))),
@@ -377,7 +383,7 @@ Code::Code(const char *s, bool n) {                       ///< new colon word
     desc  = "";
     xt    = w ? w->xt : NULL;
     token = n ? dict->size() : 0;
-//    printf(" => new Code(%s) token=%d\n", s, token);
+    printf(" => new Code(%s)=%p token=%d\n", s, w ? w : this, token);
     if (n && w) pstr("reDef?");                           /// * warn word redefined
 }
 ///
@@ -391,7 +397,7 @@ void Code::nest(VM &vm) {
     for (int i=0; i < (int)pf.size(); i++) {
         try         { pf[i]->nest(vm); } /// * execute recursively
         catch (...) { break; }
-        // printf("%-3x => RS=%d, SS=%d %s", i, (int)vm.rs.size(), (int)vm.ss.size(), pf[i]->name);
+        printf("%-3x => RS=%d, SS=%d %s", i, (int)vm.rs.size(), (int)vm.ss.size(), pf[i]->name);
     }
 }
 ///====================================================================
@@ -471,15 +477,15 @@ const Code *find(const char *s) {              ///> scan dictionary, last to fir
     if (strchr(s, ':') > s) return find_ns(s);     ///< search by namespace
     for (int j = nspace.size() - 1; j >= 0; --j) { ///< search from leaf
         FV<Code*> &d = nspace[j]->vt;
-//        printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
+        printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
         for (int i = (int)d.size() - 1; i >= 0; --i) {
             if (STRCMP(s, d[i]->name)==0) {
-//                printf("[%d,%d] %s ", j, i, d[i]->name);
+                printf("[%d,%d] %s ", j, i, d[i]->name);
                 return d[i];
             }
         }
     }
-//    printf("not found ");
+    printf("not found ");
     return NULL;                               /// * word not found
 }
 
@@ -506,16 +512,22 @@ DU parse_number(const char *s, int b) {
 void forth_core(VM &vm, const char *idiom) {
     Code *w = (Code*)find(idiom);     ///< find the word named idiom in dict
     if (w) {                          /// * word found?
-//        printf("=> w->name=%s\n", w->name);
-        if (vm.compile && !w->immd)   /// * are we compiling new word?
+        printf("=> w=%s\n", w->name);
+        if (vm.compile && !w->immd) {  /// * are we compiling new word?
+            dstat("before ADD_W+w", vm);
             ADD_W(w);                 /// * append word ptr to it
+            dstat("after ADD_W+w", vm);
+        }
         else w->nest(vm);             /// * execute forth word
         return;
     }
     DU  n = parse_number(idiom, *vm.base);  ///< try as a number, throw exception
-//    printf("=> lit %d\n", n);
-    if (vm.compile)                   /// * are we compiling new word?
+    printf("=> lit %d\n", n);
+    if (vm.compile) {                  /// * are we compiling new word?
+        dstat("before ADD_W+lit", vm);
         ADD_W(new Lit(n));            /// * append numeric literal to it
+        dstat("after ADD_W+lit", vm);
+    }
     else PUSH(n);                     /// * add value to data stack
 }
 ///====================================================================
