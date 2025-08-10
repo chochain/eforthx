@@ -15,7 +15,6 @@ Code           root("forth", false);  ///< global dictionary
 FV<Code*>      nspace;                ///< namespace stack
 FV<Code*>      *dict = &root.vt;      ///< current namespace
 Code           *last;                 ///< last word cached
-Tmp            noname;
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
@@ -46,21 +45,21 @@ void dstat(const char *prefix, VM &vm) {
     }
     printf("last=%s.pf[%ld] compile=%d\n", last->name, last->pf.size(), vm.compile);
 }
-void _enscope(const char *s, VM &vm) {
-    dstat("before %s", s, vm);
-    DICT_PUSH(new Code(word()));   /// create new word
+void _enscope(const char *s, VM &vm, Code *c) {
+    dstat(s, vm);
+    DICT_PUSH(c);                  /// create new word
     nspace.push(last);             /// store current namespace
     dict = &last->vt;              /// new word's vt keeps new namespace
     vm.compile++;
-    dstat("after %s", s, vm);
+    dstat("after", vm);
 }
 void _descope(const char *s, VM &vm) {
-    dstat("before %s", s, vm);
+    dstat(s, vm);
     nspace.pop();                  /// restore outer namespace
     dict = &nspace[-1]->vt;
     last = nspace[-vm.compile]->vt[-1];
     --vm.compile;
-    dstat("after %s", s, vm);
+    dstat("after", vm);
 }
 ///
 ///> Forth Dictionary Assembler
@@ -198,32 +197,16 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         dstat("before IF", vm);
-         ADD_W(new Bran(_if));
-         DICT_PUSH(new Tmp);
-         dstat("after IF", vm);
-        ),                      ///< keep temp branching code
+         Bran *b = new Bran(_if);
+         ADD_W(b);
+         _enscope("before IF", vm, b)),
     IMMD("else",
-         dstat("before ELSE", vm);
-         Bran *b = BTGT;
-         BRAN(b->pf);
-         b->stage = 1;
-         dstat("after ELSE", vm);
-        ),
-    IMMD("then",
-         dstat("before THEN", vm);
-         Bran *b = BTGT;
-         int  s  = b->stage;                   ///< branching state
-         if (s==0) {
-             BRAN(b->pf);                      /// * if.{pf}.then
-             BEND();
-         }
-         else {                                /// * else.{p1}.then, or
-             BRAN(b->p1);                      /// * then.{p1}.next
-             if (s==1) BEND();                 /// * if..else..then
-         }
-         dstat("after THEN", vm);
-        ),
+         _descope("after IF", vm);
+         Bran *b = new Bran(_else);
+         ADD_W(b);
+         _enscope("before ELSE", vm, b)),
+    IMMD("then", _descope("before THEN", vm)),
+    IMMD("end",  _descope("before END", vm)),
     /// @}
     /// @defgroup Loops
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
@@ -281,7 +264,7 @@ const Code rom[] {               ///< Forth dictionary
     /// @{
     IMMD("[",      --vm.compile),
     IMMD("]",      vm.compile++),
-    IMMD(":",      _enscope(":", vm)),
+    IMMD(":",      _enscope(":", vm, new Code(word()))),
     IMMD(";",      _descope(";", vm)),
     IMMD("constant",
          DICT_PUSH(new Code(word()));
@@ -423,13 +406,14 @@ void _str(VM &vm, Code &c)  {
     if (!c.token) pstr(c.name);
     else { PUSH(c.token); PUSH(strlen(c.name)); }
 }
-void _lit(VM &vm, Code &c)  { PUSH(c.q[0]);  }
-void _var(VM &vm, Code &c)  { PUSH(c.token); }
-void _tor(VM &vm, Code &c)  { RS.push(POP()); }
-void _tor2(VM &vm, Code &c) { RS.push(SS.pop()); RS.push(POP()); }
-void _if(VM &vm, Code &c)   { NEST(POP() ? c.pf : ((Bran&)c).p1); }
-void _begin(VM &vm, Code &c){    ///> begin.while.repeat, begin.until
-    int b = c.stage;             ///< branching state
+void _lit(VM &vm,   Code &c) { PUSH(c.q[0]);  }
+void _var(VM &vm,   Code &c) { PUSH(c.token); }
+void _tor(VM &vm,   Code &c) { RS.push(POP()); }
+void _tor2(VM &vm,  Code &c) { RS.push(SS.pop()); RS.push(POP()); }
+void _if(VM &vm,    Code &c) { if (POP()) NEST(c.pf); } ///< conditional branch
+void _else(VM &vm,  Code &c) { NEST(c.pf); }            ///< unconditional 
+void _begin(VM &vm, Code &c){                           ///> begin.while.repeat, begin.until
+    int b = c.stage;                           ///< branching state
     while (true) {
         NEST(c.pf);                            /// * begin..
         if (b==0 && POP()!=0) break;           /// * ..until
