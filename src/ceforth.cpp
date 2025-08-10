@@ -29,9 +29,10 @@ Tmp            noname;
 #define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
 #define DICT_POP()   (delete dict->pop(),last=(*dict)[-1])
 #define ADD_W(w)     (last->append((Code*)w))
-#define BTGT()       ((Bran*)(nspace[-2]->vt[-1]->pf[-1]))      /** branching target   */
-#define BRAN(p)      ((p).merge(last->pf))                      /** add branching code */
-#define BEND()       (last=(nspace[-2]->vt[-1]))
+#define BLAST        (nspace[-2]->vt[-1])              /** last word before branching */
+#define BTGT         ((Bran*)(BLAST->pf[-1]))          /** branching target           */
+#define BRAN(p)      ((p).merge(last->pf))             /** add branching code         */
+#define BEND()       (delete dict->pop(),last=BLAST)   /** pop branching tmp off dict */
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
 
@@ -44,6 +45,22 @@ void dstat(const char *prefix, VM &vm) {
         printf("[%d]%s.vt[%ld] ", i, ns->name, ns->vt.size());
     }
     printf("last=%s.pf[%ld] compile=%d\n", last->name, last->pf.size(), vm.compile);
+}
+void _enscope(const char *s, VM &vm) {
+    dstat("before %s", s, vm);
+    DICT_PUSH(new Code(word()));   /// create new word
+    nspace.push(last);             /// store current namespace
+    dict = &last->vt;              /// new word's vt keeps new namespace
+    vm.compile++;
+    dstat("after %s", s, vm);
+}
+void _descope(const char *s, VM &vm) {
+    dstat("before %s", s, vm);
+    nspace.pop();                  /// restore outer namespace
+    dict = &nspace[-1]->vt;
+    last = nspace[-vm.compile]->vt[-1];
+    --vm.compile;
+    dstat("after %s", s, vm);
 }
 ///
 ///> Forth Dictionary Assembler
@@ -66,7 +83,7 @@ const Code rom[] {               ///< Forth dictionary
     CODE("*",      TOS *= SS.pop()),
     CODE("/",      TOS =  SS.pop() / TOS),
     CODE("mod",    TOS =  INT(MOD(SS.pop(), TOS))),          /// ( a b -- c ) c integer, see fmod
-    CODE("*/",     TOS =  (DU2)SS.pop() * SS.pop() / TOS),   /// ( a b c -- d ) d=a*b / c (float)
+    CODE("*/",     TOS =  (DU2)SS.pop() * SS.pop() / TOS),   /// ( a b c -- d ) d=a*b / c (float) 
     CODE("/mod",   DU  n = SS.pop();                         /// ( a b -- c d ) c=a%b, d=int(a/b)
                    DU  t = TOS;
                    DU  m = MOD(n, t);
@@ -181,14 +198,21 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
+         dstat("before IF", vm);
          ADD_W(new Bran(_if));
-         last = &noname),                      ///< keep temp branching code
+         DICT_PUSH(new Tmp);
+         dstat("after IF", vm);
+        ),                      ///< keep temp branching code
     IMMD("else",
-         Bran *b = BTGT();
+         dstat("before ELSE", vm);
+         Bran *b = BTGT;
          BRAN(b->pf);
-         b->stage = 1),
+         b->stage = 1;
+         dstat("after ELSE", vm);
+        ),
     IMMD("then",
-         Bran *b = BTGT();
+         dstat("before THEN", vm);
+         Bran *b = BTGT;
          int  s  = b->stage;                   ///< branching state
          if (s==0) {
              BRAN(b->pf);                      /// * if.{pf}.then
@@ -197,27 +221,29 @@ const Code rom[] {               ///< Forth dictionary
          else {                                /// * else.{p1}.then, or
              BRAN(b->p1);                      /// * then.{p1}.next
              if (s==1) BEND();                 /// * if..else..then
-         }),
+         }
+         dstat("after THEN", vm);
+        ),
     /// @}
     /// @defgroup Loops
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
     /// @{
     IMMD("begin",
          ADD_W(new Bran(_begin));
-         last = &noname),                      /// as branch target
+         DICT_PUSH(new Tmp())),                /// as branch target
     IMMD("while",
-         Bran *b = BTGT();
+         Bran *b = BTGT;
          BRAN(b->pf);                          /// * begin.{pf}.f.while
          b->stage = 2),
     IMMD("repeat",
-         Bran *b = BTGT();
+         Bran *b = BTGT;
          BRAN(b->p1); BEND()),                 /// * while.{p1}.repeat
     IMMD("again",
-         Bran *b = BTGT();
+         Bran *b = BTGT;
          BRAN(b->pf); BEND();                  /// * begin.{pf}.again
          b->stage = 1),
     IMMD("until",
-         Bran *b = BTGT();
+         Bran *b = BTGT;
          BRAN(b->pf); BEND()),                 /// * begin.{pf}.f.until
     /// @}
     /// @defgrouop FOR loops
@@ -226,13 +252,13 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("for",
          ADD_W(new Bran(_tor));
          ADD_W(new Bran(_for));
-         last = &noname),                      /// 
+         DICT_PUSH(new Tmp())),                /// * tmp storage for pf
     IMMD("aft",
-         Bran *b = BTGT();
+         Bran *b = BTGT;
          BRAN(b->pf);                          /// * for.{pf}.aft
          b->stage = 3),
     IMMD("next",
-         Bran *b = BTGT();
+         Bran *b = BTGT;
          BRAN(b->stage==0 ? b->pf : b->p2);    /// * for.{pf}.next, or
          BEND()),                              /// * then.{p2}.next
     /// @}
@@ -242,12 +268,12 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("do",
          ADD_W(new Bran(_tor2));               ///< ( limit first -- )
          ADD_W(new Bran(_loop));
-         last = &noname),
+         DICT_PUSH(new Tmp())),
     CODE("i",      PUSH(RS[-1])),
     CODE("leave",
          RS.pop(); RS.pop(); UNNEST()), /// * exit loop
     IMMD("loop",
-         Bran *b = BTGT();
+         Bran *b = BTGT;
          BRAN(b->pf);                   /// * do.{pf}.loop
          BEND()),
     /// @}
@@ -255,20 +281,8 @@ const Code rom[] {               ///< Forth dictionary
     /// @{
     IMMD("[",      --vm.compile),
     IMMD("]",      vm.compile++),
-    IMMD(":",
-         dstat("before : ",  vm);
-         DICT_PUSH(new Code(word()));   /// create new word
-         nspace.push(last);             /// store current namespace
-         dict = &last->vt;              /// new word's vt keeps new namespace
-         vm.compile++;
-         dstat("after : ",  vm)),
-    IMMD(";",
-         dstat("before ;", vm);
-         nspace.pop();                  /// restore outer namespace
-         dict = &nspace[-1]->vt;
-         last = nspace[-vm.compile]->vt[-1];
-         --vm.compile;
-         dstat("after ;", vm)),
+    IMMD(":",      _enscope(":", vm)),
+    IMMD(";",      _descope(";", vm)),
     IMMD("constant",
          DICT_PUSH(new Code(word()));
          ADD_W(new Lit(POP()))),
@@ -478,10 +492,10 @@ const Code *find(const char *s) {              ///> scan dictionary, last to fir
     if (strchr(s, ':') > s) return find_ns(s);     ///< search by namespace
     for (int j = nspace.size() - 1; j >= 0; --j) { ///< search from leaf
         FV<Code*> &d = nspace[j]->vt;
-        printf("find %s in ns[%d]=%s size=%ld => ", s, j, nspace[j]->name, d.size());
+        printf("find %s in [%d]%s.vt[%ld] => ", s, j, nspace[j]->name, d.size());
         for (int i = (int)d.size() - 1; i >= 0; --i) {
             if (STRCMP(s, d[i]->name)==0) {
-                printf("[%d,%d] %s\n", j, i, d[i]->name);
+                printf("[%d]%s\n", i, d[i]->name);
                 return d[i];
             }
         }
