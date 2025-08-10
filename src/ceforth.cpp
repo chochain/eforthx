@@ -212,53 +212,40 @@ const Code rom[] {               ///< Forth dictionary
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
     /// @{
     IMMD("begin",
-         ADD_W(new Bran(_begin));
-         DICT_PUSH(new Tmp())),                /// as branch target
+         Bran *b = new Bran(_begin);
+         ADD_W(b);
+         _enscope("begin", vm, b)),
     IMMD("while",
-         Bran *b = BTGT;
-         BRAN(b->pf);                          /// * begin.{pf}.f.while
-         b->stage = 2),
-    IMMD("repeat",
-         Bran *b = BTGT;
-         BRAN(b->p1); BEND()),                 /// * while.{p1}.repeat
-    IMMD("again",
-         Bran *b = BTGT;
-         BRAN(b->pf); BEND();                  /// * begin.{pf}.again
-         b->stage = 1),
-    IMMD("until",
-         Bran *b = BTGT;
-         BRAN(b->pf); BEND()),                 /// * begin.{pf}.f.until
+         _descope("begin", vm);
+         Bran *b = new Bran(_while);
+         ADD_W(b);
+         _enscope("while", vm, b)),
+    IMMD("until",  _descope("until", vm)),
+    IMMD("repeat", _descope("repeat", vm)),
     /// @}
     /// @defgrouop FOR loops
     /// @brief  - for...next, for...aft...then...next
     /// @{
     IMMD("for",
          ADD_W(new Bran(_tor));
-         ADD_W(new Bran(_for));
-         DICT_PUSH(new Tmp())),                /// * tmp storage for pf
-    IMMD("aft",
-         Bran *b = BTGT;
-         BRAN(b->pf);                          /// * for.{pf}.aft
-         b->stage = 3),
-    IMMD("next",
-         Bran *b = BTGT;
-         BRAN(b->stage==0 ? b->pf : b->p2);    /// * for.{pf}.next, or
-         BEND()),                              /// * then.{p2}.next
+         Bran *b = new Bran(_for);
+         ADD_W(b);
+         _enscope("for", vm, b)),
+    IMMD("next", _descope("next", vm)),
     /// @}
     /// @defgrouop DO loops
     /// @brief  - do...loop, do..leave..loop
     /// @{
     IMMD("do",
          ADD_W(new Bran(_tor2));               ///< ( limit first -- )
-         ADD_W(new Bran(_loop));
-         DICT_PUSH(new Tmp())),
+         Bran *b = new Bran(_loop);
+         ADD_W(b);
+         _enscope("do", vm, b)),
     CODE("i",      PUSH(RS[-1])),
     CODE("leave",
          RS.pop(); RS.pop(); UNNEST()), /// * exit loop
     IMMD("loop",
-         Bran *b = BTGT;
-         BRAN(b->pf);                   /// * do.{pf}.loop
-         BEND()),
+         _descope("loop", vm)),
     /// @}
     /// @defgrouop Compiler ops
     /// @{
@@ -412,16 +399,6 @@ void _tor(VM &vm,   Code &c) { RS.push(POP()); }
 void _tor2(VM &vm,  Code &c) { RS.push(SS.pop()); RS.push(POP()); }
 void _if(VM &vm,    Code &c) { if (POP()) NEST(c.pf); } ///< conditional branch
 void _else(VM &vm,  Code &c) { NEST(c.pf); }            ///< unconditional 
-void _begin(VM &vm, Code &c){                           ///> begin.while.repeat, begin.until
-    int b = c.stage;                           ///< branching state
-    while (true) {
-        NEST(c.pf);                            /// * begin..
-        if (b==0 && POP()!=0) break;           /// * ..until
-        if (b==1)             continue;        /// * ..again
-        if (b==2 && POP()==0) break;           /// * ..while..repeat
-        NEST(((Bran&)c).p1);
-    }
-}
 void _for(VM &vm, Code &c) {     ///> for..next, for..aft..then..next
     int b = c.stage;                           /// * kept in register
     try {
@@ -445,6 +422,18 @@ void _loop(VM &vm, Code &c) {                  ///> do..loop
         RS.pop(); RS.pop();
     }
     catch (...) {}                             /// handle LEAVE
+}
+void _begin(VM &vm, Code &c){                           ///> begin.while.repeat, begin.until
+    int b = c.stage;                           ///< branching state
+    while (true) {
+        NEST(c.pf);                            /// * begin..
+        if (b==0 && POP()!=0) break;           /// * ..until
+        if (b==1)             continue;        /// * ..again
+        if (b==2 && POP()==0) break;           /// * ..while..repeat
+        NEST(((Bran&)c).p1);
+    }
+}
+void _while(VM &vm, Code &c) {
 }
 void _does(VM &vm, Code &c) {
     bool hit = false;
