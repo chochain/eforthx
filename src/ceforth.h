@@ -165,16 +165,18 @@ struct Code  {                     ///> Colon words
 ///
 ///> Primitve object and function forward declarations
 ///
-void   _str(VM &vm, Code &c);        ///< dotstr, dostr
-void   _lit(VM &vm, Code &c);        ///< numeric liternal
-void   _var(VM &vm, Code &c);        ///< variable and constant
-void   _tor(VM &vm, Code &c);        ///< >r (for..next)
-void   _tor2(VM &vm, Code &c);       ///< swap >r >r (do..loop)
-void   _if(VM &vm,  Code &c);        ///< if..then, if..else..then
+void   _str(  VM &vm, Code &c);      ///< dotstr, dostr
+void   _lit(  VM &vm, Code &c);      ///< numeric liternal
+void   _var(  VM &vm, Code &c);      ///< variable and constant
+void   _tor(  VM &vm, Code &c);      ///< >r (for..next)
+void   _tor2( VM &vm, Code &c);      ///< swap >r >r (do..loop)
+void   _if(   VM &vm, Code &c);      ///< if..
+void   _else( VM &vm, Code &c);      ///< else..then
 void   _begin(VM &vm, Code &c);      ///< ..until, ..again, ..while..repeat
-void   _for(VM &vm, Code &c);        ///< for..next, for..aft..then..next
-void   _loop(VM &vm, Code &c);       ///< do..loop
-void   _does(VM &vm, Code &c);       ///< does>
+void   _while(VM &vm, Code &c);      ///< f.while..
+void   _for(  VM &vm, Code &c);      ///< for..next, for..aft..then..next
+void   _loop( VM &vm, Code &c);      ///< do..loop
+void   _does( VM &vm, Code &c);      ///< does>
 ///
 ///> polymorphic constructors
 ///
@@ -193,9 +195,9 @@ struct Bran : Code {
     FV<Code*>  p2;                   ///< parameter field - then..next
     Bran(XT fp) : Code(fp) {
         const char *nm[] = {
-            "if", "begin", "\t", "for", "\t", "do", "does>"
+            "if", "else", "begin", "while", "\t", "for", "\t", "do", "does>"
         };
-        XT xt[] = { _if, _begin, _tor, _for, _tor2, _loop, _does };
+        XT xt[] = { _if, _else, _begin, _while, _tor, _for, _tor2, _loop, _does };
     
         for (int i=0; i < (int)(sizeof(nm)/sizeof(const char*)); i++) {
             if ((uintptr_t)xt[i]==(uintptr_t)fp) name = nm[i];
