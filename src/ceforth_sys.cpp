@@ -123,8 +123,8 @@ void ss_dump(VM &vm, bool forced) {       ///> display data stack and ok promt
 }
 void _see(const Code &c, int dp) {               ///< disassemble a colon word
     static const FV<Code*> nil = {};
-    if (dp > 2) return;                          /// * non-recursive
     auto pp = [](const string &s, const FV<Code*> &pf, int dp) { ///> recursive dump with indent
+        if (dp > 2) return;                      /// * non-recursive
         int i = dp;
         if (dp && s != "\t") { fout << ENDL; }   ///> newline control
         while (i--) { fout << "  "; } fout << s; ///> indentation control
@@ -133,8 +133,9 @@ void _see(const Code &c, int dp) {               ///< disassemble a colon word
     auto pq = [](const FV<DU> &q) {
         for (DU i : q) fout << i << (q.size() > 1 ? " " : "");
     };
-    auto pm = [](const FV<Code*> &vt, int dp) {  ///> recursive dump with indent
-        for (auto w : vt) {
+    auto pm = [](const Code &c, int dp) {          ///> recursive dump with indent
+        for (auto w : c.vt) {
+            if (w->is_bran) continue;
             fout << ENDL;
             for (int i=0; i<dp; i++) fout << "  "; ///> indentation control
             fout << ":" << w->name;
@@ -143,35 +144,10 @@ void _see(const Code &c, int dp) {               ///< disassemble a colon word
     string sn(c.name);
     
     if (c.is_str) sn = (c.token ? "s\" " : ".\" ") + sn + "\"";
+    
     pp(sn, c.pf, dp);                            ///< inline code
-    
-    if (sn=="if")    {
-        if (c.stage==1) pp("else", ((Bran&)c).p1, dp);
-        pp("then", nil, dp);
-    }
-    else if (sn=="begin") {
-        switch (c.stage) {
-        case 0: pp("until", nil, dp); break;
-        case 1: pp("again", nil, dp); break;
-        case 2:
-            pp("while",  ((Bran&)c).p1, dp);
-            pp("repeat", nil, dp);
-            break;
-        }
-    }
-    else if (sn=="for") {
-        if (c.stage==3) {
-            pp("aft",  ((Bran&)c).p1, dp);
-            pp("then", ((Bran&)c).p2, dp);
-        }
-        pp("next", nil, dp);
-    }
-    else if (sn=="do") {
-        pp("loop", nil, dp);
-    }
-    else pq(c.q);
-    
-    pm(c.vt, dp+1);                       ///< display methods
+    pq(c.q);
+    pm(c, dp+1);                                 ///< display methods
 }
 void see(const Code &c, int base) {
     if (c.xt) fout << "  ->{ " << c.desc << "; }";
