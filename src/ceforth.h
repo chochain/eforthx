@@ -37,7 +37,7 @@ template<typename T>
 struct FV : public vector<T> {      ///< our super-vector class
     FV *merge(FV<T> &v) {
         this->insert(this->end(), v.begin(), v.end());
-        printf("..clearing %p..", this);
+        printf("..FV clearing %p..\n", this);
         v.clear(); return this;
     }
     ~FV() {                         ///< free pointed elements
@@ -153,10 +153,12 @@ struct Code  {                     ///> Colon words
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
+#define NONAME_NODE 0                        /* use this node to store :noname        */
+#define BASE_NODE   1                        /* use this node to store radix          */
+#define BOOL(f)     ((f) ? -1 : 0)           /* Forth use 0xffff instead of 1 as in C */
 #define TOS         (vm.tos)
 #define SS          (vm.ss)
 #define RS          (vm.rs)
-#define BOOL(f)     ((f) ? -1 : 0)
 #define CODE(s, g)  { s, #g, [](VM &vm, Code &c){ g; }, __COUNTER__ }
 #define IMMD(s, g)  { s, #g, [](VM &vm, Code &c){ g; }, __COUNTER__ | Code::IMMD_FLAG }
 #define PUSH(v)     (SS.push(TOS), TOS=((DU)(v)))
