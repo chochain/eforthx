@@ -15,6 +15,7 @@ Code           root("forth", false);  ///< global dictionary
 FV<Code*>      nspace;                ///< namespace stack
 FV<Code*>      *dict = &root.vt;      ///< current namespace
 Code           *last;                 ///< last word cached
+Code           noname((XT)NULL);
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
@@ -197,7 +198,7 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         if (!vm.compile) last = root.vt[0]->pf[0];
+         if (!vm.compile) _enscope("BEGIN", vm, new Bran(_begin));
          Bran *b = new Bran(_if);
          ADD_W(b);
          _enscope("IF", vm, b)),
@@ -209,11 +210,14 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("then",
          _descope("THEN", vm);
          ADD_W(new Bran(_then));
-         if (!vm.compile) SS.push(0)),
-    IMMD("end",
-         _descope("END", vm);
-         ADD_W(new Bran(_end));
-         if (!vm.compile) SS.push(0)),
+         if (strcmp(last->name,"begin")==0) {
+             noname.pf.clear();
+             noname.pf.merge((*dict)[-1]->pf);
+             _descope("BEGIN", vm);
+//             DICT_POP();
+             PUSH(-DU1);
+         }),
+    IMMD("end", _descope("END", vm)),
     /// @}
     /// @defgroup Loops
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
@@ -286,9 +290,10 @@ const Code rom[] {               ///< Forth dictionary
     CODE("is",                                                   /// w -- 
          Code *w = (Code*)find(word()); if (!w) return;          /// defered word
          IU i = POPI();  if (i >= (IU)dict->size()) return;      /// like this word
-         w->pf.clear();                                          /// clear out pf
-         w->pf.merge((*dict)[i]->pf);                            /// or colon word
-         w->xt = (*dict)[i]->xt),                                /// if primitive
+         Code *src = i >= DU0 ? &noname : (*dict)[i];
+         w->pf.clear();                                          /// clear out w
+         w->xt = src->xt;                                        /// built-in word
+         w->pf.merge(src->pf)),                                  /// merge colon word
     /// @}
     /// @defgroup Memory Access ops
     /// @{
@@ -405,7 +410,7 @@ void _toi( VM &vm, Code &c) { vm.i.push(POP()); }
 void _toi2(VM &vm, Code &c) { vm.i.push(POP()); vm.i.push(POP()); }
 void _if(  VM &vm, Code &c) { vm.i.push(POP()); if (!ZEQ(vm.i[0])) NEST(c.pf); }
 void _else(VM &vm, Code &c) { if (ZEQ(vm.i[0])) NEST(c.pf); }
-void _then( VM &vm, Code &c) { vm.i.pop(); }
+void _then( VM &vm, Code &c){ vm.i.pop(); }
 void _for( VM &vm, Code &c) {                  ///> for..next
     try {
         do {
