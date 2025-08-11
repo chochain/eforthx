@@ -197,16 +197,23 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
+         if (!vm.compile) last = root.vt[0]->pf[0];
          Bran *b = new Bran(_if);
          ADD_W(b);
-         _enscope("before IF", vm, b)),
+         _enscope("IF", vm, b)),
     IMMD("else",
-         _descope("after IF", vm);
+         _descope("done IF", vm);
          Bran *b = new Bran(_else);
          ADD_W(b);
-         _enscope("before ELSE", vm, b)),
-    IMMD("then", _descope("before THEN", vm)),
-    IMMD("end",  _descope("before END", vm)),
+         _enscope("ELSE", vm, b)),
+    IMMD("then",
+         _descope("THEN", vm);
+         ADD_W(new Bran(_then));
+         if (!vm.compile) SS.push(0)),
+    IMMD("end",
+         _descope("END", vm);
+         ADD_W(new Bran(_end));
+         if (!vm.compile) SS.push(0)),
     /// @}
     /// @defgroup Loops
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
@@ -216,7 +223,6 @@ const Code rom[] {               ///< Forth dictionary
          ADD_W(b);
          _enscope("begin", vm, b)),
     IMMD("while",
-         _descope("begin", vm);
          Bran *b = new Bran(_while);
          ADD_W(b);
          _enscope("while", vm, b)),
@@ -227,7 +233,7 @@ const Code rom[] {               ///< Forth dictionary
     /// @brief  - for...next, for...aft...then...next
     /// @{
     IMMD("for",
-         ADD_W(new Bran(_tor));
+         ADD_W(new Bran(_toi));
          Bran *b = new Bran(_for);
          ADD_W(b);
          _enscope("for", vm, b)),
@@ -237,15 +243,14 @@ const Code rom[] {               ///< Forth dictionary
     /// @brief  - do...loop, do..leave..loop
     /// @{
     IMMD("do",
-         ADD_W(new Bran(_tor2));               ///< ( limit first -- )
+         ADD_W(new Bran(_toi2));               ///< ( limit first -- )
          Bran *b = new Bran(_loop);
          ADD_W(b);
          _enscope("do", vm, b)),
-    CODE("i",      PUSH(RS[-1])),
-    CODE("leave",
-         RS.pop(); RS.pop(); UNNEST()), /// * exit loop
-    IMMD("loop",
-         _descope("loop", vm)),
+    CODE("i",      PUSH(vm.i[-1])),
+    CODE("j",      PUSH(vm.i[-2])),
+    CODE("leave",  UNNEST()),                  /// * exit loop
+    IMMD("loop",   _descope("loop", vm)),
     /// @}
     /// @defgrouop Compiler ops
     /// @{
@@ -382,59 +387,50 @@ void Code::nest(VM &vm) {
     for (int i=0; i < (int)pf.size(); i++) {
         try         { pf[i]->nest(vm); } /// * execute recursively
         catch (...) { break; }
-//        printf("%-3x => RS=%d, SS=%d %s", i, (int)vm.rs.size(), (int)vm.ss.size(), pf[i]->name);
+        printf("%-3x: RS=%d, SS=%d I=%d %s\n",
+            i, (int)vm.rs.size(), (int)vm.ss.size(), (int)vm.i.size(), pf[i]->name);
     }
 }
 ///====================================================================
 ///
 ///> Primitive Functions
 ///
-void _str(VM &vm, Code &c)  {
+void _str( VM &vm, Code &c)  {
     if (!c.token) pstr(c.name);
     else { PUSH(c.token); PUSH(strlen(c.name)); }
 }
-void _lit(VM &vm,   Code &c) { PUSH(c.q[0]);  }
-void _var(VM &vm,   Code &c) { PUSH(c.token); }
-void _tor(VM &vm,   Code &c) { RS.push(POP()); }
-void _tor2(VM &vm,  Code &c) { RS.push(SS.pop()); RS.push(POP()); }
-void _if(VM &vm,    Code &c) { if (POP()) NEST(c.pf); } ///< conditional branch
-void _else(VM &vm,  Code &c) { NEST(c.pf); }            ///< unconditional 
-void _for(VM &vm, Code &c) {     ///> for..next, for..aft..then..next
-    int b = c.stage;                           /// * kept in register
+void _lit( VM &vm, Code &c) { PUSH(c.q[0]);  }
+void _var( VM &vm, Code &c) { PUSH(c.token); }
+void _toi( VM &vm, Code &c) { vm.i.push(POP()); }
+void _toi2(VM &vm, Code &c) { vm.i.push(POP()); vm.i.push(POP()); }
+void _if(  VM &vm, Code &c) { vm.i.push(POP()); if (!ZEQ(vm.i[0])) NEST(c.pf); }
+void _else(VM &vm, Code &c) { if (ZEQ(vm.i[0])) NEST(c.pf); }
+void _then( VM &vm, Code &c) { vm.i.pop(); }
+void _for( VM &vm, Code &c) {                  ///> for..next
     try {
         do {
             NEST(c.pf);
-        } while (b==0 && (RS[-1]-=1) >=0);     /// * for..next only
-        while (b) {                            /// * aft
-            NEST(((Bran&)c).p2);               /// * then..next
-            if ((RS[-1]-=1) < 0) break;        /// * decrement counter
-            NEST(((Bran&)c).p1);               /// * aft..then
-        }
-        RS.pop();
+        } while ((vm.i[-1]-=DU1) >=0);         /// * for..next only
     }
-    catch (...) { RS.pop(); }                  /// handle EXIT
+    catch (...) {}                             /// handle EXIT
+    vm.i.pop();
 }
 void _loop(VM &vm, Code &c) {                  ///> do..loop
     try { 
         do {
             NEST(c.pf);
-        } while ((RS[-1]+=1) < RS[-2]);        /// increment counter
-        RS.pop(); RS.pop();
+        } while ((vm.i[-2]+=DU1) < vm.i[-1]);  /// increment counter
     }
     catch (...) {}                             /// handle LEAVE
+    vm.i.pop(); vm.i.pop();                    /// pop off counters
 }
-void _begin(VM &vm, Code &c){                           ///> begin.while.repeat, begin.until
-    int b = c.stage;                           ///< branching state
+void _begin(VM &vm, Code &c){                  ///> begin.while.repeat, begin.until
     while (true) {
         NEST(c.pf);                            /// * begin..
-        if (b==0 && POP()!=0) break;           /// * ..until
-        if (b==1)             continue;        /// * ..again
-        if (b==2 && POP()==0) break;           /// * ..while..repeat
-        NEST(((Bran&)c).p1);
     }
 }
-void _while(VM &vm, Code &c) {
-}
+void _while(VM &vm, Code &c) { if (POPI()) NEST(c.pf); }
+void _end( VM &vm, Code &c) {}
 void _does(VM &vm, Code &c) {
     bool hit = false;
     for (auto w : (*dict)[c.token]->pf) {
