@@ -12,7 +12,7 @@ VM _vm0;                           ///< singleton, no VM pooling
 VM& vm_get(int id) { return _vm0; }/// * return the singleton
 void uvar_init() {
     Var *v = new Var(10);          /// a variable to keep radices for all VMs
-    (*dict)[0]->append(v);         /// * borrow dict[0]->pf[0]->q[vm.id] for VM's user area
+    (*dict)[BASE_NODE]->append(v); // * borrow dict[1]->pf[0]->q[vm.id] for VM's user area
     
     _vm0.id    = 0;                /// * VM id
     _vm0.state = HOLD;             /// * VM ready to run
@@ -118,7 +118,7 @@ void t_pool_stop() {
 ///
 void uvar_init() {
     Var *v = new Var(10);                         ///< a variable to keep radix
-    (*dict)[0]->append(v);                        /// * borrow dict[0]->pf[0]->q[vm.id] for VM's user area
+    (*dict)[BASE_NODE]->append(v);                /// * borrow dict[1]->pf[0]->q[vm.id] for VM's user area
 
     v->q.reserve(E4_VM_POOL_SZ);
     for (int i = 0; i < E4_VM_POOL_SZ; i++) {
