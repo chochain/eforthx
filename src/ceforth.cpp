@@ -15,17 +15,16 @@ Code           root("forth", false);  ///< global dictionary
 FV<Code*>      nspace;                ///< namespace stack
 FV<Code*>      *dict = &root.vt;      ///< current namespace
 Code           *last;                 ///< last word cached
-Code           noname((XT)NULL);
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
 #define VAR(i_w)     (*((*dict)[(int)((i_w) & 0xffff)]->pf[0]->q.data()+((i_w) >> 16)))
 #define STR(i_w)     (                                      \
-        EQ(i_w, UINT(-DU1))                                 \
+        ZEQ(i_w)                                            \
         ? vm.pad.c_str()                                    \
         : (*dict)[(i_w) & 0xffff]->pf[(i_w) >> 16]->name    \
         )
-#define BASE         ((U8*)&VAR(vm.id << 16))
+#define BASE         ((U8*)&VAR((vm.id << 16) | BASE_NODE))
 #define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
 #define DICT_POP()   (delete dict->pop(),last=(*dict)[-1])
 #define ADD_W(w)     (last->append((Code*)w))
@@ -35,6 +34,7 @@ Code           noname((XT)NULL);
 #define BEND()       (delete dict->pop(),last=BLAST)   /** pop branching tmp off dict */
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
+#define NONAME       (nspace[NONAME_NODE]->vt[0])      /** borrow bye.pf for storage  */
 
 void dstat(const char *prefix, VM &vm) {
     for (int i=vm.compile; i>0; --i) printf(">> ");
@@ -54,8 +54,12 @@ void _enscope(const char *s, VM &vm, Code *c) {
     vm.compile++;
     dstat("after", vm);
 }
-void _descope(const char *s, VM &vm) {
+void _descope(const char *s, VM &vm, bool tmp=false) {
     dstat(s, vm);
+    if (tmp) {
+        NONAME->pf.clear(); NONAME->pf.merge(last->pf);
+        NONAME->vt.clear(); NONAME->vt.merge(last->vt);
+    }
     nspace.pop();                  /// restore outer namespace
     dict = &nspace[-1]->vt;
     last = nspace[-vm.compile]->vt[-1];
@@ -156,7 +160,7 @@ const Code rom[] {               ///< Forth dictionary
     /// @}
     /// @defgroup IO ops
     /// @{
-    CODE("base",   PUSH(vm.id << 16)),   /// dict[0]->pf[0]->q[id] used for base
+    CODE("base",   PUSH((vm.id << 16) | BASE_NODE)),   /// nspace[1]->pf[0]->q[id] used for base
     CODE("decimal",dot(RDX, *BASE=10)),
     CODE("hex",    dot(RDX, *BASE=16)),
     CODE("bl",     PUSH(0x20)),
@@ -183,7 +187,7 @@ const Code rom[] {               ///< Forth dictionary
          }
          else {
              vm.pad = s;                             /// copy string onto pad
-             PUSH(-DU1); PUSH(STRLEN(s));            /// -1 = pad, len
+             PUSH(0); PUSH(STRLEN(s));               /// 0 = pad, len
          }),
     IMMD(".\"",
          const char *s = word('"'); if (!s) return;
@@ -198,7 +202,7 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         if (!vm.compile) _enscope("BEGIN", vm, new Bran(_begin));
+         if (!vm.compile) _enscope("BEGIN", vm, new Bran(_end));  /// * create a node (as noname)
          Bran *b = new Bran(_if);
          ADD_W(b);
          _enscope("IF", vm, b)),
@@ -210,12 +214,10 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("then",
          _descope("THEN", vm);
          ADD_W(new Bran(_then));
-         if (strcmp(last->name,"begin")==0) {
-             noname.pf.clear();
-             noname.pf.merge((*dict)[-1]->pf);
-             _descope("BEGIN", vm);
-//             DICT_POP();
-             PUSH(-DU1);
+         if (last->xt==_end) {
+             _descope("BEGIN", vm, true);
+             DICT_POP();
+             PUSH(NONAME_NODE);
          }),
     IMMD("end", _descope("END", vm)),
     /// @}
@@ -275,7 +277,7 @@ const Code rom[] {               ///< Forth dictionary
     /// @defgroup metacompiler
     /// @brief - dict is directly used, instead of shield by macros
     /// @{
-    CODE("exec",  (*dict)[POPI()]->nest(vm)),                    /// w --
+    CODE("exec", (*dict)[POPI()]->nest(vm)),                     /// w --
     IMMD("create",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Var(DU0));
@@ -284,16 +286,19 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("does>",
          ADD_W(new Bran(_does));
          last->pf[-1]->token = last->token),                     /// keep WP
-    CODE("to",                                                   /// n --
+    IMMD("to",                                                   /// n --
          const Code *w = find(word()); if (!w) return;
          VAR(w->token) = POP()),                                 /// update value
-    CODE("is",                                                   /// w -- 
+    IMMD("is",                                                   /// w -- 
          Code *w = (Code*)find(word()); if (!w) return;          /// defered word
-         IU i = POPI();  if (i >= (IU)dict->size()) return;      /// like this word
-         Code *src = i >= DU0 ? &noname : (*dict)[i];
-         w->pf.clear();                                          /// clear out w
-         w->xt = src->xt;                                        /// built-in word
-         w->pf.merge(src->pf)),                                  /// merge colon word
+         IU i = POPI(); if (i >= (IU)dict->size()) return;       /// like this word
+         printf("IS dict->sz=%ld i=%d ", dict->size(), i);
+         Code *src = (*dict)[i];
+         printf("src=%s.pf[%ld] vt[%ld]\n", src->name, src->pf.size(), src->vt.size());
+         if (i > NONAME_NODE) w->xt = src->xt;                   /// built-in word
+         w->pf.clear(); w->pf.merge(src->pf);                    /// merge colon codes
+         w->vt.clear(); w->vt.merge(src->vt);                    /// merge namespaces
+         printf("w=%s.pf[%ld] vt[%ld]\n", w->name, w->pf.size(), w->vt.size())),
     /// @}
     /// @defgroup Memory Access ops
     /// @{
@@ -336,7 +341,7 @@ const Code rom[] {               ///< Forth dictionary
     /// @{
     CODE("abort",   TOS = -DU1; SS.clear(); RS.clear()),        /// clear ss, rs
     CODE("here",    PUSH(last->token)),
-    CODE("'",
+    IMMD("'",
          const Code *w = find(word()); if (w) PUSH(w->token)),
     CODE(".s",      ss_dump(vm, true)),                         /// dump parameter stack
     CODE("words",   words(*vm.base)),                           /// display word lists
