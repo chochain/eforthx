@@ -126,7 +126,7 @@ void _see(const Code &c, int dp) {               ///< disassemble a colon word
     auto pp = [](const string &s, const FV<Code*> &pf, int dp) { ///> recursive dump with indent
         if (dp > 2) return;                      /// * non-recursive
         int i = dp;
-        if (dp && s != "\t") { fout << ENDL; }   ///> newline control
+        if (dp && s != "\t") { fout << ENDL; }   ///> newline control (skip branching \t)
         while (i--) { fout << "  "; } fout << s; ///> indentation control
         for (auto w : pf) _see(*w, dp + 1);
     };
@@ -214,10 +214,6 @@ void _dump(Code *c, int dp) {
         fout << "} ";
     };
     pp("pf", c->pf, dp);
-    if (c->is_bran) {
-        pp("p1", ((Bran*)c)->p1, dp);
-        pp("p2", ((Bran*)c)->p2, dp);
-    }
 }
 void mem_dump(IU w0, IU n, int base) {           ///> ' xx 1 dump
     fout << setbase(16) << setfill('0');
