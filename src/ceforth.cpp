@@ -34,7 +34,6 @@ Code           *last;                 ///< last word cached
 #define BEND()       (delete dict->pop(),last=BLAST)   /** pop branching tmp off dict */
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
-#define NONAME       (nspace[NONAME_NODE]->vt[0])      /** borrow bye.pf for storage  */
 
 void dstat(const char *prefix, VM &vm) {
     for (int i=vm.compile; i>0; --i) printf(">> ");
@@ -54,12 +53,8 @@ void _enscope(const char *s, VM &vm, Code *c) {
     vm.compile++;
     dstat("after", vm);
 }
-void _descope(const char *s, VM &vm, bool tmp=false) {
+void _descope(const char *s, VM &vm) {
     dstat(s, vm);
-    if (tmp) {
-        NONAME->pf.clear(); NONAME->pf.merge(last->pf);
-        NONAME->vt.clear(); NONAME->vt.merge(last->vt);
-    }
     nspace.pop();                  /// restore outer namespace
     dict = &nspace[-1]->vt;
     last = nspace[-vm.compile]->vt[-1];
@@ -202,7 +197,9 @@ const Code rom[] {               ///< Forth dictionary
     ///     dict[-1]->pf[...] as *tmp -------------------+
     /// @{
     IMMD("if",
-         if (!vm.compile) _enscope("BEGIN", vm, new Bran(_end));  /// * create a node (as noname)
+         if (!vm.compile) {
+             _enscope("NONAME", vm, new Bran(_noname));  /// * create envelope
+         }
          Bran *b = new Bran(_if);
          ADD_W(b);
          _enscope("IF", vm, b)),
@@ -214,10 +211,10 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("then",
          _descope("THEN", vm);
          ADD_W(new Bran(_then));
-         if (last->xt==_end) {
-             _descope("BEGIN", vm, true);
-             DICT_POP();
-             PUSH(NONAME_NODE);
+         if (last->xt==_noname) {
+             _descope("NONAME", vm);
+             NEST(last->pf);
+             DICT_POP();                      ///< drop envelope
          }),
     IMMD("end", _descope("END", vm)),
     /// @}
@@ -290,15 +287,12 @@ const Code rom[] {               ///< Forth dictionary
          const Code *w = find(word()); if (!w) return;
          VAR(w->token) = POP()),                                 /// update value
     IMMD("is",                                                   /// w -- 
-         Code *w = (Code*)find(word()); if (!w) return;          /// defered word
-         IU i = POPI(); if (i >= (IU)dict->size()) return;       /// like this word
-         printf("IS dict->sz=%ld i=%d ", dict->size(), i);
+         Code *w = (Code*)find(word()); if (!w) return;          ///< make defered word
+         IU i = POPI(); if (i >= (IU)dict->size()) return;       ///< like this word
          Code *src = (*dict)[i];
-         printf("src=%s.pf[%ld] vt[%ld]\n", src->name, src->pf.size(), src->vt.size());
-         if (i > NONAME_NODE) w->xt = src->xt;                   /// built-in word
+         w->xt = src->xt;                                        /// built-in word
          w->pf.clear(); w->pf.merge(src->pf);                    /// merge colon codes
-         w->vt.clear(); w->vt.merge(src->vt);                    /// merge namespaces
-         printf("w=%s.pf[%ld] vt[%ld]\n", w->name, w->pf.size(), w->vt.size())),
+         w->vt.clear(); w->vt.merge(src->vt)),                   /// merge namespaces
     /// @}
     /// @defgroup Memory Access ops
     /// @{
@@ -440,7 +434,7 @@ void _begin(VM &vm, Code &c){                  ///> begin.while.repeat, begin.un
     }
 }
 void _while(VM &vm, Code &c) { if (POPI()) NEST(c.pf); }
-void _end( VM &vm, Code &c) {}
+void _end( VM &vm, Code &c) { UNNEST(); }
 void _does(VM &vm, Code &c) {
     bool hit = false;
     for (auto w : (*dict)[c.token]->pf) {
@@ -449,6 +443,7 @@ void _does(VM &vm, Code &c) {
     }
     UNNEST();                                  /// exit caller
 }
+void _noname(VM &vm, Code &c) {}
 ///====================================================================
 ///
 ///> Forth outer interpreter
