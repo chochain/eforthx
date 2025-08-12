@@ -27,7 +27,7 @@ Code           *last;                 ///< last word cached
 #define BASE         ((U8*)&VAR((vm.id << 16) | BASE_NODE))
 #define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
 #define DICT_POP()   (delete dict->pop(),last=(*dict)[-1])
-#define ADD_W(w)     (last->append((Code*)w))
+#define ADD_W(w)     (last->append((Code*)w))          /** add w and return last      */
 #define BLAST        (nspace[-2]->vt[-1])              /** last word before branching */
 #define BTGT         ((Bran*)(BLAST->pf[-1]))          /** branching target           */
 #define BRAN(p)      ((p).merge(last->pf))             /** add branching code         */
@@ -47,7 +47,7 @@ void dstat(const char *prefix, VM &vm) {
 }
 void _enscope(const char *s, VM &vm, Code *c) {
     dstat(s, vm);
-    DICT_PUSH(c);                  /// create new word
+    DICT_PUSH(c);                  /// create new word, set last
     nspace.push(last);             /// store current namespace
     dict = &last->vt;              /// new word's vt keeps new namespace
     vm.compile++;
@@ -275,13 +275,16 @@ const Code rom[] {                ///< Forth dictionary
     IMMD("]",      vm.compile++),
     IMMD(":",      _enscope(":", vm, new Code(word()))),
     IMMD(";",      _descope(";", vm)),
-    CODE("constant",
-         DICT_PUSH(new Code(word()));
-         ADD_W(new Lit(POP()))),
-    CODE("variable",
-         DICT_PUSH(new Code(word()));
-         Code *w = ADD_W(new Var(DU0));
-         w->pf[0]->token = w->token),
+    IMMD("constant",
+         _enscope("const", vm, new Code(word()));
+         ADD_W(new Lit(POP()));
+         _descope("const", vm)),
+    IMMD("variable",
+         _enscope("var", vm, new Code(word()));
+         Code *w = ADD_W(new Var(DU0)); /// * w = last i.e. defined word
+         printf("..w=%s=%p..", w->name, w);
+         w->pf[-1]->token = w->token;
+         _descope("var", vm)),
     CODE("immediate", last->immd = 1),
     CODE("exit",   UNNEST()),           /// -- (exit from word)
     /// @}
@@ -290,13 +293,14 @@ const Code rom[] {                ///< Forth dictionary
     /// @{
     CODE("exec", (*dict)[POPI()]->nest(vm)),                     /// w --
     CODE("create",
-         DICT_PUSH(new Code(word()));
-         Code *w = ADD_W(new Var(DU0));
-         w->pf[0]->token = w->token;
-         w->pf[0]->q.pop()),
+         _enscope("create", vm, new Code(word()));
+         Code *w = ADD_W(new Var(DU0)); ///< w is the new word created
+         w->pf[-1]->token = w->token;
+         w->pf[-1]->q.pop();
+         _descope("create", vm)),
     IMMD("does>",
-         ADD_W(new Bran(_does));
-         last->pf[-1]->token = last->token),                     /// keep WP
+         Code *w = ADD_W(new Bran(_does));
+         w->pf[-1]->token = w->token),                           /// keep WP
     CODE("to",                                                   /// n --
          const Code *w = find(word()); if (!w) return;
          VAR(w->token) = POP()),                                 /// update value
@@ -398,16 +402,24 @@ Code::Code(const char *s, bool n) {                       ///< new colon word
 ///> Forth inner interpreter
 ///
 void Code::nest(VM &vm) {
+    dstat("in nest", vm);
+    nspace.push(this);
+    dict = &this->vt;
+    
 //    vm.set_state(NEST);                /// * this => lock, major slow down
     vm.state = NEST;                     /// * racing? No, helgrind says so
-    if (xt) { xt(vm, *this); return; }   /// * run primitive word
-
-    for (int i=0; i < (int)pf.size(); i++) {
-        try         { pf[i]->nest(vm); } /// * execute recursively
-        catch (...) { break; }
-        printf("%-3x: RS=%d, SS=%d I=%d %s\n",
-            i, (int)vm.rs.size(), (int)vm.ss.size(), (int)vm.i.size(), pf[i]->name);
+    if (xt) xt(vm, *this);               /// * run primitive word
+    else {
+        for (int i=0; i < (int)pf.size(); i++) {
+            try         { pf[i]->nest(vm); } /// * execute recursively
+            catch (...) { break; }
+            printf("%-3x: RS=%d, SS=%d I=%d %s\n",
+                   i, (int)vm.rs.size(), (int)vm.ss.size(), (int)vm.i.size(), pf[i]->name);
+        }
     }
+    nspace.pop();
+    dict = &nspace[-1]->vt;
+    dstat("out nest", vm);
 }
 ///====================================================================
 ///
