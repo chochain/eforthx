@@ -5,7 +5,7 @@ This is an evolution and experimental work trying to modernize eForth. It is spu
 Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/reforth) and Travis Bemann's wornderful [zeptoforth](https://github.com/tabemann/zeptoforth), I try twisting my own arms and bringing the new concepts/contructs into what I had. Hopefully, not to polute Forth language's simplicy and elegance nor diviate too far away from the common idiomatic usage.
 
 ## Nested Module (or sub-words)
-
+```
     : X ... ;           \ define X
     : Y                 \ define Y
         : a ... ;          \ nested word a
@@ -13,11 +13,11 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
         a b X ... ;     \ Y's code which calls a b and outer X
     ^ Y # a             \ call Y::a
     Y:a                 \ or in short (Forther might not like this)
-
+```
 * FV<Code*> nspace - global namespace stack
 * Code:: FV<Code*> vt - virtual table for current namespace
 * Code Node:
-
+```
     +------+-----+-----+------+----------+-----------------+
     | LINK | PFA | NSA | LAST | name-str | code/parameters |
     +------+-----+-----+------+----------+-----------------+
@@ -33,7 +33,8 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
                   [ A ] <-- [ B ] <-- W1.LAST
                                  \
                                   [ A ] <-- [ X ] <-- [ Y ] <-- W1B.LAST
-                                  
+```
+
 ## Simplified Control Structures
    TODO
    
@@ -54,7 +55,7 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
 
 * CC: 20250806: branch off from [eForth](https://github.com/chochain/eforth)
     + Refactor
-    
+    ```
         - add Code::vt (virtual table for nested node)
         - add Code::desc
         - move see to _sys (implementation)
@@ -69,3 +70,4 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
         - rename _tor,_tor2 => _toi, _toi2
         - drop Bran::p1,p2, by scoping envelopes now
         - use BASE_NODE instead of hardcoded [0]
+    ```
