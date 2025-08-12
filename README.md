@@ -58,6 +58,17 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
     3 for xx next                   \ eForthX can behave like a scripting language
     => 2 1 0 2 1 0 2 1 0 2 1 0 ok   \ without using :noname
 ```
+
+## Local variables/constants
+```
+    : xx
+      variable x
+      : x++ 1 x +! ;
+      x++ x++ x @ . ;
+    : yy
+      [ 123 ] constant y
+      3 y + ;
+```      
    
 ## eForthX Internals
    TODO
