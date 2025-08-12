@@ -180,7 +180,7 @@ void   _end(VM &vm, Code &c);      ///< begin
 void   _for(VM &vm, Code &c);      ///< for..next, for..aft..then..next
 void   _loop(VM &vm, Code &c);     ///< do..loop
 void   _does(VM &vm, Code &c);     ///< does>
-void   _noname(VM &vm,Code &c);
+void   _module(VM &vm,Code &c);
 ///
 ///> polymorphic constructors
 ///
@@ -199,11 +199,11 @@ struct Bran : Code {
     Bran(XT fp) : Code(fp) {
         const char *nm[] = {
             "if", "else", "then", "begin", "while", "end",
-            "\t", "for", "\t", "do", "does>", "noname"        /// * \t to skip see display
+            "\t", "for", "\t", "do", "does>", "module"        /// * \t to skip see display
         };
         XT xt[] = {
             _if, _else, _then, _begin, _while, _end,
-            _toi, _for,  _toi2, _loop, _does, _noname
+            _toi, _for,  _toi2, _loop, _does, _module
         };
         for (int i=0; i < (int)(sizeof(nm)/sizeof(const char*)); i++) {
             if ((uintptr_t)xt[i]==(uintptr_t)fp) name = nm[i];
