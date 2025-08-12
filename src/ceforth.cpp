@@ -61,6 +61,16 @@ void _descope(const char *s, VM &vm) {
     --vm.compile;
     dstat("after", vm);
 }
+void ENFOLD(VM &vm) {
+    if (vm.compile) return;
+    _enscope("NONAME", vm, new Bran(_module));  /// * create envelope
+}
+void UNFOLD(VM &vm) {
+    if (last->xt!=_module) return;
+    _descope("NONAME", vm);
+    NEST(last->pf);
+    DICT_POP();                    ///< drop envelope
+}
 ///
 ///> Forth Dictionary Assembler
 /// @note:
@@ -72,7 +82,7 @@ void _descope(const char *s, VM &vm) {
 ///       potential issue comes with it.
 ///    3. a degenerated lambda becomes a function pointer
 ///
-const Code rom[] {               ///< Forth dictionary
+const Code rom[] {                ///< Forth dictionary
     CODE("bye",    forth_quit()),
     ///
     /// @defgroup ALU ops
@@ -178,28 +188,27 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("s\"",
          const char *s = word('"'); if (!s) return;
          if (vm.compile) {
-             ADD_W(new Str(s+1, last->token, (int)last->pf.size()));
+             ADD_W(new Str(s, last->token, (int)last->pf.size()));
          }
          else {
-             vm.pad = s;                             /// copy string onto pad
-             PUSH(0); PUSH(STRLEN(s));               /// 0 = pad, len
+             vm.pad = s+1;                           /// copy string onto pad
+             PUSH(0); PUSH(STRLEN(s+1));             /// 0 = pad, len
          }),
     IMMD(".\"",
          const char *s = word('"'); if (!s) return;
          if (vm.compile) ADD_W(new Str(s+1));
-         else            pstr(s)),
+         else            pstr(s+1)),
     /// @}
     /// @defgroup Branching ops
     /// @brief - if...then, if...else...then
-    ///     dict[-2]->pf[0,1,2,...,-1] as *last
-    ///                              \--->pf[...] if  <--+ merge
-    ///                               \-->p1[...] else   |
-    ///     dict[-1]->pf[...] as *tmp -------------------+
+    ///     dict[-1]
+    ///       ->pf[0,1,...,-3,-2,-1]
+    ///                     |->if->pf[0,1,2,...,-1],      last = if
+    ///                        |->else->pf[0,1,2....,-1], last = else
+    ///                           |->then->pf[]           last = then
     /// @{
     IMMD("if",
-         if (!vm.compile) {
-             _enscope("NONAME", vm, new Bran(_noname));  /// * create envelope
-         }
+         ENFOLD(vm);                  /// * create envelope if in interpreter mode
          Bran *b = new Bran(_if);
          ADD_W(b);
          _enscope("IF", vm, b)),
@@ -211,12 +220,11 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("then",
          _descope("THEN", vm);
          ADD_W(new Bran(_then));
-         if (last->xt==_noname) {
-             _descope("NONAME", vm);
-             NEST(last->pf);
-             DICT_POP();                      ///< drop envelope
-         }),
-    IMMD("end", _descope("END", vm)),
+         UNFOLD(vm)),                /// * remove envelope if in interpreter mode
+    IMMD("end",                      ///< can replace then
+         _descope("END", vm);
+         ADD_W(new Bran(_end));
+         UNFOLD(vm)),                    
     /// @}
     /// @defgroup Loops
     /// @brief  - begin...again, begin...f until, begin...f while...repeat
@@ -236,24 +244,30 @@ const Code rom[] {               ///< Forth dictionary
     /// @brief  - for...next, for...aft...then...next
     /// @{
     IMMD("for",
+         ENFOLD(vm);
          ADD_W(new Bran(_toi));
          Bran *b = new Bran(_for);
          ADD_W(b);
          _enscope("for", vm, b)),
-    IMMD("next", _descope("next", vm)),
+    IMMD("next",
+         _descope("next", vm);
+         UNFOLD(vm)),
     /// @}
     /// @defgrouop DO loops
     /// @brief  - do...loop, do..leave..loop
     /// @{
     IMMD("do",
+         ENFOLD(vm);
          ADD_W(new Bran(_toi2));               ///< ( limit first -- )
          Bran *b = new Bran(_loop);
          ADD_W(b);
          _enscope("do", vm, b)),
-    CODE("i",      PUSH(vm.i[-1])),
+    CODE("i",      PUSH(vm.i[-1])),            /// * loop counter
     CODE("j",      PUSH(vm.i[-2])),
     CODE("leave",  UNNEST()),                  /// * exit loop
-    IMMD("loop",   _descope("loop", vm)),
+    IMMD("loop",
+         _descope("loop", vm);
+         UNFOLD(vm)),
     /// @}
     /// @defgrouop Compiler ops
     /// @{
@@ -261,21 +275,21 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("]",      vm.compile++),
     IMMD(":",      _enscope(":", vm, new Code(word()))),
     IMMD(";",      _descope(";", vm)),
-    IMMD("constant",
+    CODE("constant",
          DICT_PUSH(new Code(word()));
          ADD_W(new Lit(POP()))),
-    IMMD("variable",
+    CODE("variable",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Var(DU0));
          w->pf[0]->token = w->token),
-    IMMD("immediate", last->immd = 1),
+    CODE("immediate", last->immd = 1),
     CODE("exit",   UNNEST()),           /// -- (exit from word)
     /// @}
     /// @defgroup metacompiler
     /// @brief - dict is directly used, instead of shield by macros
     /// @{
     CODE("exec", (*dict)[POPI()]->nest(vm)),                     /// w --
-    IMMD("create",
+    CODE("create",
          DICT_PUSH(new Code(word()));
          Code *w = ADD_W(new Var(DU0));
          w->pf[0]->token = w->token;
@@ -283,10 +297,10 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("does>",
          ADD_W(new Bran(_does));
          last->pf[-1]->token = last->token),                     /// keep WP
-    IMMD("to",                                                   /// n --
+    CODE("to",                                                   /// n --
          const Code *w = find(word()); if (!w) return;
          VAR(w->token) = POP()),                                 /// update value
-    IMMD("is",                                                   /// w -- 
+    CODE("is",                                                   /// w -- 
          Code *w = (Code*)find(word()); if (!w) return;          ///< make defered word
          IU i = POPI(); if (i >= (IU)dict->size()) return;       ///< like this word
          Code *src = (*dict)[i];
@@ -335,11 +349,11 @@ const Code rom[] {               ///< Forth dictionary
     /// @{
     CODE("abort",   TOS = -DU1; SS.clear(); RS.clear()),        /// clear ss, rs
     CODE("here",    PUSH(last->token)),
-    IMMD("'",
+    CODE("'",
          const Code *w = find(word()); if (w) PUSH(w->token)),
     CODE(".s",      ss_dump(vm, true)),                         /// dump parameter stack
     CODE("words",   words(*vm.base)),                           /// display word lists
-    IMMD("see",
+    CODE("see",
          const Code *w = find(word());
          if (w) see(*w, *vm.base);
          dot(CR)),
@@ -353,11 +367,11 @@ const Code rom[] {               ///< Forth dictionary
     IMMD("include", load(vm, word())),                          /// include an OS file
     CODE("included",                                            /// include a file (programmable)
          POP(); U32 i_w = POPI(); load(vm, STR(i_w))),
-    CODE("mstat",   mem_stat()),                                /// display memory stat
+    CODE("ok",      mem_stat()),                                /// display memory stat
     CODE("clock",   PUSH(millis())),                            /// get system clock in msec
     CODE("rnd",     PUSH(RND())),                               /// get a random number
     CODE("ms",      IU i = POPI(); delay(i)),                   /// n -- delay n msec
-    IMMD("forget",
+    CODE("forget",
          const Code *w = find(word()); if (!w) return;
          int   t = MAX((int)w->token, (int)find("boot")->token + 1);
          for (int i=(int)dict->size(); i>t; i--) DICT_POP()),
@@ -410,6 +424,7 @@ void _toi2(VM &vm, Code &c) { vm.i.push(POP()); vm.i.push(POP()); }
 void _if(  VM &vm, Code &c) { vm.i.push(POP()); if (!ZEQ(vm.i[0])) NEST(c.pf); }
 void _else(VM &vm, Code &c) { if (ZEQ(vm.i[0])) NEST(c.pf); }
 void _then( VM &vm, Code &c){ vm.i.pop(); }
+void _end( VM &vm, Code &c) { vm.i.pop(); }
 void _for( VM &vm, Code &c) {                  ///> for..next
     try {
         do {
@@ -434,7 +449,6 @@ void _begin(VM &vm, Code &c){                  ///> begin.while.repeat, begin.un
     }
 }
 void _while(VM &vm, Code &c) { if (POPI()) NEST(c.pf); }
-void _end( VM &vm, Code &c) { UNNEST(); }
 void _does(VM &vm, Code &c) {
     bool hit = false;
     for (auto w : (*dict)[c.token]->pf) {
@@ -443,7 +457,7 @@ void _does(VM &vm, Code &c) {
     }
     UNNEST();                                  /// exit caller
 }
-void _noname(VM &vm, Code &c) {}
+void _module(VM &vm, Code &c) {}
 ///====================================================================
 ///
 ///> Forth outer interpreter
