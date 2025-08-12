@@ -2,17 +2,22 @@
 
 This is an evolution and experimental work trying to modernize eForth. It is spun off from [eForth](https://github.com/chochain/eforth) and is very much a work in progress.
 
-Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/reforth) and Travis Bemann's wornderful [zeptoforth](https://github.com/tabemann/zeptoforth). 
-
-Hopefully, not to polute Forth language's simplicy and elegance nor diviate from the common idiomatic usage. Here's the list of proposed change. 
+Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/reforth) and Travis Bemann's wornderful [zeptoforth](https://github.com/tabemann/zeptoforth), I try twisting my own arms and bringing the new concepts/contructs into what I had. Hopefully, not to polute Forth language's simplicy and elegance nor diviate too far away from the common idiomatic usage.
 
 ## Nested Module (or sub-words)
 
-    FV<Code*> nspace - global namespace stack
+    : X ... ;           \ define X
+    : Y                 \ define Y
+        : a ... ;          \ nested word a
+        : b ... ;          \ nested word b
+        a b X ... ;     \ Y's code which calls a b and outer X
+    ^ Y # a             \ call Y::a
+    Y:a                 \ or in short (Forther might not like this)
 
-    Code:: FV<Code*> vt - virtual table for current namespace
-    
-    Code Node: 
+* FV<Code*> nspace - global namespace stack
+* Code:: FV<Code*> vt - virtual table for current namespace
+* Code Node:
+
     +------+-----+-----+------+----------+-----------------+
     | LINK | PFA | NSA | LAST | name-str | code/parameters |
     +------+-----+-----+------+----------+-----------------+
@@ -30,26 +35,18 @@ Hopefully, not to polute Forth language's simplicy and elegance nor diviate from
                                   [ A ] <-- [ X ] <-- [ Y ] <-- W1B.LAST
                                   
 ## Simplified Control Structures
+   TODO
+   
 ## Smart Compilation
-
+   TODO
+   
 ## eForthX Internals
-
+   TODO
+   
 ## Source Code Directories
 
     + ~/src       - multi-threaded, dynamic vector-based, object threading
     + ~/platform  - platform specific code for C++, ESP32, Windows, and WASM
-    + ~/orig      - archive from Dr. Ting and my past works
-    +    /33b     - refactored ceForth_33, separate ASM from VM (used in eForth1 for Adruino UNO)
-    +    /ting    - ceForth source codes collaborated with Dr. Ting
-    +    /esp32   - esp32forth source codes collaborated with Dr. Ting
-    +    /40x     - my experiments, refactor _40 into vector-based subroutine-threaded, with 16-bit offset
-    +    /50x     - my experiments, add multi-threading to _40
-
-## Benchmark and Tuning
-
-### Desktop PC - 10K*10K cycles on 3.2GHz AMD**
-
-#### v0.2 ~/src/ceforth, multi-threading capable, dynamic vector, object threading
 
 ## References
 
@@ -57,6 +54,7 @@ Hopefully, not to polute Forth language's simplicy and elegance nor diviate from
 
 * CC: 20250806: branch off from [eForth](https://github.com/chochain/eforth)
     + Refactor
+    
         - add Code::vt (virtual table for nested node)
         - add Code::desc
         - move see to _sys (implementation)
