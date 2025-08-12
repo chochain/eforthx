@@ -271,8 +271,8 @@ const Code rom[] {                ///< Forth dictionary
     /// @}
     /// @defgrouop Compiler ops
     /// @{
-    IMMD("[",      --vm.compile),
-    IMMD("]",      vm.compile++),
+    IMMD("[",      vm.i.push(vm.compile); vm.compile=0),
+    IMMD("]",      vm.compile=vm.i.pop()),
     IMMD(":",      _enscope(":", vm, new Code(word()))),
     IMMD(";",      _descope(";", vm)),
     IMMD("constant",
@@ -402,10 +402,11 @@ Code::Code(const char *s, bool n) {                       ///< new colon word
 ///> Forth inner interpreter
 ///
 void Code::nest(VM &vm) {
-    dstat("in nest", vm);
-    nspace.push(this);
-    dict = &this->vt;
-    
+    dstat("***** in nest", vm);
+//    if (this->vt.size()) {
+//        nspace.push(this);
+//        dict = &this->vt;
+//    }
 //    vm.set_state(NEST);                /// * this => lock, major slow down
     vm.state = NEST;                     /// * racing? No, helgrind says so
     if (xt) xt(vm, *this);               /// * run primitive word
@@ -417,9 +418,11 @@ void Code::nest(VM &vm) {
                    i, (int)vm.rs.size(), (int)vm.ss.size(), (int)vm.i.size(), pf[i]->name);
         }
     }
-    nspace.pop();
-    dict = &nspace[-1]->vt;
-    dstat("out nest", vm);
+//    if (this->vt.size()) {
+//        nspace.pop();
+//        dict = &nspace[-1]->vt;
+//    }
+    dstat("***** out nest", vm);
 }
 ///====================================================================
 ///
