@@ -153,8 +153,7 @@ struct Code  {                     ///> Colon words
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
-#define NONAME_NODE 0                        /* use this node to store :noname        */
-#define BASE_NODE   1                        /* use this node to store radix          */
+#define BASE_NODE   0                        /* use this node to store radix          */
 #define BOOL(f)     ((f) ? -1 : 0)           /* Forth use 0xffff instead of 1 as in C */
 #define TOS         (vm.tos)
 #define SS          (vm.ss)
@@ -167,20 +166,21 @@ struct Code  {                     ///> Colon words
 ///
 ///> Primitve object and function forward declarations
 ///
-void   _str(  VM &vm, Code &c);      ///< dotstr, dostr
-void   _lit(  VM &vm, Code &c);      ///< numeric liternal
-void   _var(  VM &vm, Code &c);      ///< variable and constant
-void   _toi(  VM &vm, Code &c);      ///< >r (for..next)
-void   _toi2( VM &vm, Code &c);      ///< swap >r >r (do..loop)
-void   _if(   VM &vm, Code &c);      ///< if..then or if..else..then
-void   _else( VM &vm, Code &c);      ///< ..else..
-void   _then(  VM &vm, Code &c);     ///< ..then
-void   _begin(VM &vm, Code &c);      ///< begin..f.until, begin..again, begin.f.while..repeat/end
-void   _while(VM &vm, Code &c);      ///< f.while..
-void   _end(  VM &vm, Code &c);      ///< begin
-void   _for(  VM &vm, Code &c);      ///< for..next, for..aft..then..next
-void   _loop( VM &vm, Code &c);      ///< do..loop
-void   _does( VM &vm, Code &c);      ///< does>
+void   _str(VM &vm, Code &c);      ///< dotstr, dostr
+void   _lit(VM &vm, Code &c);      ///< numeric liternal
+void   _var(VM &vm, Code &c);      ///< variable and constant
+void   _toi(VM &vm, Code &c);      ///< >r (for..next)
+void   _toi2(VM &vm, Code &c);     ///< swap >r >r (do..loop)
+void   _if(VM &vm, Code &c);       ///< if..then or if..else..then
+void   _else(VM &vm, Code &c);     ///< ..else..
+void   _then(VM &vm, Code &c);     ///< ..then
+void   _begin(VM &vm, Code &c);    ///< begin..f.until, begin..again, begin.f.while..repeat/end
+void   _while(VM &vm, Code &c);    ///< f.while..
+void   _end(VM &vm, Code &c);      ///< begin
+void   _for(VM &vm, Code &c);      ///< for..next, for..aft..then..next
+void   _loop(VM &vm, Code &c);     ///< do..loop
+void   _does(VM &vm, Code &c);     ///< does>
+void   _noname(VM &vm,Code &c);
 ///
 ///> polymorphic constructors
 ///
@@ -199,11 +199,11 @@ struct Bran : Code {
     Bran(XT fp) : Code(fp) {
         const char *nm[] = {
             "if", "else", "then", "begin", "while", "end",
-            "\t", "for", "\t", "do", "does>"        /// * \t to skip see display
+            "\t", "for", "\t", "do", "does>", "noname"        /// * \t to skip see display
         };
         XT xt[] = {
             _if, _else, _then, _begin, _while, _end,
-            _toi, _for,  _toi2, _loop, _does
+            _toi, _for,  _toi2, _loop, _does, _noname
         };
         for (int i=0; i < (int)(sizeof(nm)/sizeof(const char*)); i++) {
             if ((uintptr_t)xt[i]==(uintptr_t)fp) name = nm[i];
