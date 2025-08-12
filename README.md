@@ -36,10 +36,28 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
 ```
 
 ## Simplified Control Structures
-   TODO
-   
+```
+    0= if ... end
+    3 > if ... else ... end
+    
+    3 for ... end
+    10 0 do ... end
+    
+    begin
+    ...
+    3 = while ... leave
+    4 = while ... leave
+    0 = until ... leave
+    ...
+    repeat
+```   
 ## Smart Compilation
-   TODO
+```
+    : xx 2 for i . next ;
+    
+    3 for xx next                   \ eForthX can behave like a scripting language
+    => 2 1 0 2 1 0 2 1 0 2 1 0 ok   \ without using :noname
+```
    
 ## eForthX Internals
    TODO
