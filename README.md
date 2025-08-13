@@ -51,22 +51,40 @@ Code Example
 ```
 
 ## Smart Compilation
-Anton Ertl said "state-smartness is evil"! [see](http://www.euroforth.org/ef98/ertl98.pdf). But, for now, let's live through it to see what's the good and bad of it.
+Anton Ertl said ["state-smartness is evil"](http://www.euroforth.org/ef98/ertl98.pdf). But, just for a kick for now, let's live through it to see what's the good and bad of it.
+
+### Available since eForth v4
+```
+    s" hello" type                  \ this was in eForth already since v4
+    ." hello"                       \ behaves the same as .( hello)
+```
+
+### dynamic scoping
 ```
     : xx 2 for i . next ;
+
+    1 if xx else ." help!" then
+    => 2 1 0 ok
     
     3 for xx next                   \ eForthX can behave like a scripting language
     => 2 1 0 2 1 0 2 1 0 2 1 0 ok   \ without using :noname
 ```
 
 ## Simplified Control Structures
+### conditional branch
 ```
     0= if ... end
     3 > if ... else ... end
-    
+```
+
+### loops
+```
     3 for ... end
     10 0 do ... end
-    
+```
+
+### block
+```
     begin
     ...
     3 = while ... leave
@@ -85,10 +103,13 @@ Anton Ertl said "state-smartness is evil"! [see](http://www.euroforth.org/ef98/e
     : yy
       [ 123 ] constant y
       3 y + ;
-```      
+```
+
+## Record
+    TODO
    
 ## eForthX Internals
-   TODO
+    TODO
    
 ## Source Code Directories
 
