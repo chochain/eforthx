@@ -50,6 +50,15 @@ Code Example
                                   [ A ] <-- [ X ] <-- [ Y ] <-- W1B.LAST
 ```
 
+## Smart Compilation
+Anton Ertl said "state-smartness is evil"! [see](http://www.euroforth.org/ef98/ertl98.pdf). But, for now, let's live through it to see what's the good and bad of it.
+```
+    : xx 2 for i . next ;
+    
+    3 for xx next                   \ eForthX can behave like a scripting language
+    => 2 1 0 2 1 0 2 1 0 2 1 0 ok   \ without using :noname
+```
+
 ## Simplified Control Structures
 ```
     0= if ... end
@@ -66,13 +75,6 @@ Code Example
     ...
     repeat
 ```   
-## Smart Compilation
-```
-    : xx 2 for i . next ;
-    
-    3 for xx next                   \ eForthX can behave like a scripting language
-    => 2 1 0 2 1 0 2 1 0 2 1 0 ok   \ without using :noname
-```
 
 ## Local variables/constants
 ```
