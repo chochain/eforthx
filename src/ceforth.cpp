@@ -12,7 +12,7 @@ using namespace std;
 ///> Forth VM state variables
 ///
 Code           root("forth", false);  ///< global dictionary
-FV<Code*>      nspace;                ///< namespace stack
+FV<Code*>      VS;                    ///< vocabulary stack
 FV<Code*>      *dict = &root.vt;      ///< current namespace
 Code           *last;                 ///< last word cached
 ///
@@ -28,7 +28,7 @@ Code           *last;                 ///< last word cached
 #define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
 #define DICT_POP()   (delete dict->pop(),last=(*dict)[-1])
 #define ADD_W(w)     (last->append((Code*)w))          /** add w and return last      */
-#define BLAST        (nspace[-2]->vt[-1])              /** last word before branching */
+#define BLAST        (VS[-2]->vt[-1])                  /** last word before branching */
 #define BTGT         ((Bran*)(BLAST->pf[-1]))          /** branching target           */
 #define BRAN(p)      ((p).merge(last->pf))             /** add branching code         */
 #define BEND()       (delete dict->pop(),last=BLAST)   /** pop branching tmp off dict */
@@ -37,10 +37,10 @@ Code           *last;                 ///< last word cached
 
 void dstat(const char *prefix, VM &vm) {
     for (int i=vm.compile; i>0; --i) printf(">> ");
-    int sz = (int)nspace.size();
-    printf("%s ns.sz=%d ", prefix, sz);
+    int sz = (int)VS.size();
+    printf("%s voc.sz=%d ", prefix, sz);
     for (int i=0; i<sz; i++) {
-        Code *ns = nspace[i];
+        Code *ns = VS[i];
         printf("[%d]%s.vt[%ld] ", i, ns->name, ns->vt.size());
     }
     printf("last=%s.pf[%ld] compile=%d\n", last->name, last->pf.size(), vm.compile);
@@ -48,16 +48,16 @@ void dstat(const char *prefix, VM &vm) {
 void _enscope(const char *s, VM &vm, Code *c) {
     dstat(s, vm);
     DICT_PUSH(c);                  /// create new word, set last
-    nspace.push(last);             /// store current namespace
+    VS.push(last);                 /// store current namespace
     dict = &last->vt;              /// new word's vt keeps new namespace
     vm.compile++;
     dstat("after", vm);
 }
 void _descope(const char *s, VM &vm) {
     dstat(s, vm);
-    nspace.pop();                  /// restore outer namespace
-    dict = &nspace[-1]->vt;
-    last = nspace[-vm.compile]->vt[-1];
+    VS.pop();                      /// restore outer namespace
+    dict = &VS[-1]->vt;
+    last = VS[-vm.compile]->vt[-1];
     --vm.compile;
     dstat("after", vm);
 }
@@ -165,7 +165,7 @@ const Code rom[] {                ///< Forth dictionary
     /// @}
     /// @defgroup IO ops
     /// @{
-    CODE("base",   PUSH((vm.id << 16) | BASE_NODE)),   /// nspace[1]->pf[0]->q[id] used for base
+    CODE("base",   PUSH((vm.id << 16) | BASE_NODE)),   /// VS[1]->pf[0]->q[id] used for base
     CODE("decimal",dot(RDX, *BASE=10)),
     CODE("hex",    dot(RDX, *BASE=16)),
     CODE("bl",     PUSH(0x20)),
@@ -402,27 +402,29 @@ Code::Code(const char *s, bool n) {                       ///< new colon word
 ///> Forth inner interpreter
 ///
 void Code::nest(VM &vm) {
-    dstat("***** in nest", vm);
+    auto exec = [&vm](FV<Code*> &pf) {
+        for (int i=0; i < (int)pf.size(); i++) {
+            try         { pf[i]->nest(vm); } /// * execute recursively
+            catch (...) { break; }
+            for (int i=0; i<(int)VS.size(); i++) printf(">> ");
+            printf("%-3x: RS=%d, SS=%d I=%d %s\n",
+                i, (int)vm.rs.size(), (int)vm.ss.size(), (int)vm.i.size(), pf[i]->name);
+        }
+    };
+    printf("this=%s ", this->name); dstat("***** in nest", vm);
 //    if (this->vt.size()) {
-//        nspace.push(this);
+//        VS.push(this);
 //        dict = &this->vt;
 //    }
 //    vm.set_state(NEST);                /// * this => lock, major slow down
     vm.state = NEST;                     /// * racing? No, helgrind says so
-    if (xt) xt(vm, *this);               /// * run primitive word
-    else {
-        for (int i=0; i < (int)pf.size(); i++) {
-            try         { pf[i]->nest(vm); } /// * execute recursively
-            catch (...) { break; }
-            printf("%-3x: RS=%d, SS=%d I=%d %s\n",
-                   i, (int)vm.rs.size(), (int)vm.ss.size(), (int)vm.i.size(), pf[i]->name);
-        }
-    }
+    if (xt)             xt(vm, *this);   /// * run primitive word
+    else if (pf.size()) exec(pf);
 //    if (this->vt.size()) {
-//        nspace.pop();
-//        dict = &nspace[-1]->vt;
+//        VS.pop();
+//        dict = &VS[-1]->vt;
 //    }
-    dstat("***** out nest", vm);
+    printf("this=%s ", this->name); dstat("***** out nest", vm);
 }
 ///====================================================================
 ///
@@ -484,18 +486,18 @@ const Code* find_ns(const char *ns) {
         return i;
     };
     int n = ncolon((char*)ns);
-    printf("ncolon=%d, find_ns %s ns.size=%ld\n", n, ns, nspace.size());
-    for (int i = 0; i < (int)nspace.size(); i++) {
-        printf("  ns[%d]=%s\n", i, nspace[i]->name);
-        if (STRCMP(ns, nspace[i]->name)==0) return nspace[i];
+    printf("ncolon=%d, find_ns %s ns.size=%ld\n", n, ns, VS.size());
+    for (int i = 0; i < (int)VS.size(); i++) {
+        printf("  ns[%d]=%s\n", i, VS[i]->name);
+        if (STRCMP(ns, VS[i]->name)==0) return VS[i];
     }
     return NULL;                               ///< global namespace
 }
 const Code *find(const char *s) {              ///> scan dictionary, last to first
-    if (strchr(s, ':') > s) return find_ns(s);     ///< search by namespace
-    for (int j = nspace.size() - 1; j >= 0; --j) { ///< search from leaf
-        FV<Code*> &d = nspace[j]->vt;
-        printf("find %s in [%d]%s.vt[%ld] => ", s, j, nspace[j]->name, d.size());
+    if (strchr(s, ':') > s) return find_ns(s); ///< search by namespace
+    for (int j = VS.size() - 1; j >= 0; --j) { ///< search from leaf
+        FV<Code*> &d = VS[j]->vt;
+        printf("find %s in [%d]%s.vt[%ld] => ", s, j, VS[j]->name, d.size());
         for (int i = (int)d.size() - 1; i >= 0; --i) {
             if (STRCMP(s, d[i]->name)==0) {
                 printf("[%d]%s\n", i, d[i]->name);
@@ -554,7 +556,7 @@ void forth_init() {
     for (const Code &c : rom) {       /// * populate the dictionary
         DICT_PUSH(&c);                /// * ROM => RAM
     }
-    nspace.push(&root);               ///< initialize namespace stack
+    VS.push(&root);                   ///< initialize namespace stack
 /*
     const Code *ns = find_ns();
     printf("=> ns=%s size=%ld\n", ns ? ns->name : "not found", ns ? ns->vt.size() : 0);
