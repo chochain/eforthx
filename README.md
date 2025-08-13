@@ -2,10 +2,24 @@
 
 This is an evolution and experimental work trying to modernize eForth. It is spun off from [eForth](https://github.com/chochain/eforth) and is very much a work in progress.
 
-Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/reforth) and Travis Bemann's wornderful [zeptoforth](https://github.com/tabemann/zeptoforth), I try twisting my own arms and bringing the new concepts/contructs into what I had. Hopefully, not to polute Forth language's simplicy and elegance nor diviate too far away from the common idiomatic usage.
+Though Forth's VOCABULARY provides much greater flexibility than the scoping/namespace of other languages, to harness the power, it requires to understand an extra set of manipulation words. With background from imperative language (i.e. C/C++, Java, ...) and possibly hindered by the lack of the said words in Dr. Ting's eForth, it took me a few years to even get to them not to mention to gel my mental picture of it. See Bill Ragsdale's [YT on VOCABULARY](https://www.youtube.com/watch?v=wjppiefvc_U).
+
+Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/reforth) and Travis Bemann's wonderful [zeptoforth](https://github.com/tabemann/zeptoforth), I try twisting my own arms to bringing the scoping constructs into what I had done with eForth for experiment and learning. My own guide-line is not to pollute Forth language's simplicity and elegance nor deviate too far away from the common idiomatic usage. We'll see.
 
 ## Nested Module (or sub-words)
+### master - vector implementation
 ```
+struct Code {
+    ...
+    FV<Code*> vt;           /* each word has an extra lookup table */
+    ...
+
+Code      root("forth");    /* global word-list aka FORTH    */
+FV<Code*> VS                /* vocabulary stack aka ROOT     */
+FV<Code*> dict = &root.vt;  /* current namespace aka CONTEXT */
+Code      *last;            /* last word cached, aka CURRENT */ 
+
+Code Example
     : X ... ;           \ define X
     : Y                 \ define Y
         : a ... ;          \ nested word a
@@ -14,9 +28,8 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
     ^ Y # a             \ call Y::a
     Y:a                 \ or in short (Forther might not like this)
 ```
-* FV<Code*> nspace - global namespace stack
-* Code:: FV<Code*> vt - virtual table for current namespace
-* Code Node:
+
+### 50x - linear memory
 ```
     +------+-----+-----+------+----------+-----------------+
     | LINK | PFA | NSA | LAST | name-str | code/parameters |
@@ -93,7 +106,7 @@ Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/refor
         - update find to walk nspace outward
         - IMMD for all words with Code(word()), cannot break out from input stream
         - add FLUSH macro, along with ENDL (ok prompt is now inline)
-        - add _else, _while, _end, _then, _next, _noname Branching primtives
+        - add _else, _while, _end, _then, _next, _noname Branching primitives
         - add _enscope/_descope pair for scoping control
         - add VM::i (third stack) for loop counts and locals (future)
         - rename _tor,_tor2 => _toi, _toi2
