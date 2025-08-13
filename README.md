@@ -4,7 +4,9 @@ This is an evolution and experimental work trying to modernize eForth. It is spu
 
 Though Forth's VOCABULARY provides much greater flexibility than the scoping/namespace of other languages, to harness the power, it requires to understand an extra set of manipulation words. With background from imperative language (i.e. C/C++, Java, ...) and possibly hindered by the lack of the said words in Dr. Ting's eForth, it took me a few years to even get to them not to mention to gel my mental picture of it. See Bill Ragsdale's SVFIG [video](https://www.youtube.com/watch?v=wjppiefvc_U).
 
-Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/reforth) and Travis Bemann's wonderful [zeptoforth](https://github.com/tabemann/zeptoforth), I try twisting my own arms to bringing the scoping constructs into what I had done with eForth for experiment and learning. My own guide-line is not to pollute Forth language's simplicity and elegance nor deviate too far away from the common idiomatic usage. We'll see.
+Hinted by Sean Pringle's [Rethinking Forth](https://github.com/seanpringle/reforth) and Travis Bemann's wonderful [zeptoforth](https://github.com/tabemann/zeptoforth), I try twisting my own arms to bring the scoping constructs into eForth that I've done.
+
+For experiment and learning. My own guide-line is not to pollute Forth language's simplicity and elegance nor deviate too far away from the common idiomatic usage. We'll see.
 
 ## Nested Module (or sub-words)
 ### master - vector implementation
