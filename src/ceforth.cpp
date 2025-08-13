@@ -11,10 +11,10 @@ using namespace std;
 ///
 ///> Forth VM state variables
 ///
-Code           root("forth", false);  ///< global dictionary
-FV<Code*>      VS;                    ///< vocabulary stack
-FV<Code*>      *dict = &root.vt;      ///< current namespace
-Code           *last;                 ///< last word cached
+Code           root("forth", false);  ///< global dictionary aka FORTH
+FV<Code*>      VS;                    ///< vocabulary stack aka ROOT
+FV<Code*>      *dict = &root.vt;      ///< current namespace aka CONTEXT
+Code           *last;                 ///< last word cached aka CURRENT 
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
@@ -38,7 +38,7 @@ Code           *last;                 ///< last word cached
 void dstat(const char *prefix, VM &vm) {
     for (int i=vm.compile; i>0; --i) printf(">> ");
     int sz = (int)VS.size();
-    printf("%s voc.sz=%d ", prefix, sz);
+    printf("%s VS.sz=%d ", prefix, sz);
     for (int i=0; i<sz; i++) {
         Code *ns = VS[i];
         printf("[%d]%s.vt[%ld] ", i, ns->name, ns->vt.size());
@@ -285,6 +285,9 @@ const Code rom[] {                ///< Forth dictionary
          printf("..w=%s=%p..", w->name, w);
          w->pf[-1]->token = w->token;
          _descope("var", vm)),
+    IMMD("postpone",
+         const Code *w = find(word()); if (!w) return;
+         ADD_W(w)),
     CODE("immediate", last->immd = 1),
     CODE("exit",   UNNEST()),           /// -- (exit from word)
     /// @}
