@@ -4,19 +4,21 @@
 ///
 #include "ceforth.h"
 
-extern FV<Code*> *dict;            ///< Forth dictionary
+extern Code      root;             ///< Root namespace
+extern FV<Code*> *dict;            ///< current vocabulary
 
 #if !DO_MULTITASK
 VM _vm0;                           ///< singleton, no VM pooling
 
 VM& vm_get(int id) { return _vm0; }/// * return the singleton
 void uvar_init() {
-    Var *v = new Var(10);          /// a variable to keep radices for all VMs
-    (*dict)[BASE_NODE]->append(v); // * borrow dict[1]->pf[0]->q[vm.id] for VM's user area
+    Str::sv->push(*new string);    ///< sv[0] serves as pad
+    Var *v  = new Var(10);         ///< borrow dict[0] to keep radices
+    root.vt[BASE_NODE]->append(v); /// * root->pf[0]->q[vm.id] for VM's user area
     
     _vm0.id    = 0;                /// * VM id
     _vm0.state = HOLD;             /// * VM ready to run
-    _vm0.base  = (U8*)&v->q[0];    /// * set base pointer
+    _vm0.base  = (U8*)v->q;        /// * set base pointer
     *_vm0.base = 10;
 }
 
@@ -117,12 +119,14 @@ void t_pool_stop() {
 ///> setup/teardown user area (base pointer)
 ///
 void uvar_init() {
-    Var *v = new Var(10);                         ///< a variable to keep radix
-    (*dict)[BASE_NODE]->append(v);                /// * borrow dict[1]->pf[0]->q[vm.id] for VM's user area
+    Str::sv.push(*new string);                    ///< sv[0] serves as pad
+    Var *v = new Var(10);                         ///< borrow root to keep radix
+    v->alloc(E4_VM_POOL_SZ - 1);
+    root.vt[BASE_NODE]->append(v);                /// * borrow root->pf[0]->q[vm.id] for VM's user area
 
     v->q.reserve(E4_VM_POOL_SZ);
     for (int i = 0; i < E4_VM_POOL_SZ; i++) {
-        if (i > 0) v->q.push(10);                 /// * allocate next base storage
+        if (i > 0) v->var(i) = 10;                /// * allocate next base storage
         _vm[i].base = (U8*)&v->q[i];              /// * set base pointer
         _vm[i].id   = i;                          /// * VM id
         _vm[i].reset(0, STOP);
