@@ -121,16 +121,18 @@ void ss_dump(VM &vm, bool forced) {       ///> display data stack and ok promt
     }
     fout << FLUSH;
 }
+typedef uintptr_t UFP;
 void _see(const Code &c, int dp) {               ///< disassemble a colon word
     static const FV<Code*> nil = {};
-    auto pp = [](const string &s, const FV<Code*> &pf, int dp) { ///> recursive dump with indent
-        if (dp > 2) return;                      /// * non-recursive
-        int i = dp;
-        if (dp && s != "\t") { fout << ENDL; }   ///> newline control (skip branching \t)
-        while (i--) { fout << "  "; } fout << s; ///> indentation control
+    auto hdr = [](const string &s, int dp) {
+        if (dp && s != "\t") { fout << ENDL; }    ///> newline control (skip branching \t)
+        while (dp--) { fout << "  "; } fout << s; ///> indentation control
+    };
+    auto pp = [](const FV<Code*> &pf, int dp) {   ///> recursive dump with indent
+        if (dp > 2) return;                       /// * non-recursive
         for (auto w : pf) _see(*w, dp + 1);
     };
-    auto pq = [](const FV<DU> &q) {
+    auto pq = [](FV<DU> &q) {
         for (DU i : q) fout << i << (q.size() > 1 ? " " : "");
     };
     auto pm = [](const Code &c, int dp) {          ///> recursive dump with indent
@@ -142,12 +144,16 @@ void _see(const Code &c, int dp) {               ///< disassemble a colon word
         }
     };
     string sn(c.name);
-    
-    if (c.is_str) sn = (c.token ? "s\" " : ".\" ") + sn + "\"";
-    
-    pp(sn, c.pf, dp);                            ///< inline code
-    pq(c.q);
-    pm(c, dp+1);                                 ///< display methods
+
+    if (c.xt==_str) {
+        sn = (c.token ? "s\" " : ".\" ") + sn + "\""; hdr(sn, dp);
+    }
+    else if (c.xt == _var) { hdr("var ", dp); pq((*Var::qv)[c.token]); }
+    else if (c.xt == _lit) { hdr("lit ", dp); fout << c.lit; }
+    else {
+        hdr(sn, dp); pp(c.pf, dp);
+        pm(c, dp+1);
+    }
 }
 void see(const Code &c, int base) {
     if (c.xt) fout << "  ->{ " << c.desc << "; }";
@@ -198,13 +204,13 @@ void _dump(Code *c, int dp) {
         while (i--) { fout << "  "; }            ///> indentation control
         fout << s << "[" << pf.size() << "] { ";
         for (auto w : pf) {
-            if (w->is_str) {
+            if (w->xt == _str) {
                 fout << (w->token ? "s\" " : ".\" ") << w->name << "\"";
             }
             else if (w->token) fout << w->token;
-            else if (w->q.size()) {
+            else if (w->xt == _var) {
                 fout << "q{ ";
-                for (auto v : w->q) fout << v << " ";
+                for (auto v : (*Var::qv)[w->token]) fout << v << " ";
                 fout << "}";
             }
             else fout << (w->name[0]=='\t' ? "\\t" : w->name);
