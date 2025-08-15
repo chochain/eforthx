@@ -428,7 +428,7 @@ void _str( VM &vm, Code &c)  {
     if (!c.token) pstr(c.name);
     else { PUSH(c.token); PUSH(strlen(c.name)); }
 }
-void _lit( VM &vm, Code &c) { PUSH(((Lit*)&c)->lit); }
+void _lit( VM &vm, Code &c) { PUSH(c.lit); }
 void _var( VM &vm, Code &c) { PUSH(c.token); }
 void _toi( VM &vm, Code &c) { vm.i.push(POP()); }
 void _toi2(VM &vm, Code &c) { vm.i.push(POP()); vm.i.push(POP()); }
