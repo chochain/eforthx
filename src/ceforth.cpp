@@ -14,16 +14,12 @@ using namespace std;
 Code           root("forth", false);  ///< global dictionary aka FORTH
 FV<Code*>      VS;                    ///< vocabulary stack aka ROOT
 FV<Code*>      *dict = &root.vt;      ///< current namespace aka CONTEXT
-Code           *last;                 ///< last word cached aka CURRENT 
+Code           *last;                 ///< last word cached aka CURRENT
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
-#define VAR(i_w)     (*((*dict)[(int)((i_w) & 0xffff)]->pf[0]->q.data()+((i_w) >> 16)))
-#define STR(i_w)     (                                      \
-        ZEQ(i_w)                                            \
-        ? vm.pad.c_str()                                    \
-        : (*dict)[(i_w) & 0xffff]->pf[(i_w) >> 16]->name    \
-        )
+#define VAR(i_w)     (*Var::QV((i_w) & 0xffff, (i_w) >> 16))
+#define STR(i_w)     (Str::SV(i_w))
 #define BASE         ((U8*)&VAR((vm.id << 16) | BASE_NODE))
 #define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
 #define DICT_POP()   (delete dict->pop(),last=(*dict)[-1])
@@ -188,15 +184,15 @@ const Code rom[] {                ///< Forth dictionary
     IMMD("s\"",
          const char *s = word('"'); if (!s) return;
          if (vm.compile) {
-             ADD_W(new Str(s, last->token, (int)last->pf.size()));
+             ADD_W(new Str(s+1));                    /// token encode namespace index
          }
          else {
-             vm.pad = s+1;                           /// copy string onto pad
+             (*Str::sv)[0] = s+1;                    /// hardcopy into sv[0] (aka. PAD)
              PUSH(0); PUSH(STRLEN(s+1));             /// 0 = pad, len
          }),
     IMMD(".\"",
          const char *s = word('"'); if (!s) return;
-         if (vm.compile) ADD_W(new Str(s+1));
+         if (vm.compile) ADD_W(new Str(s+1, false)); /// token=0 => print
          else            pstr(s+1)),
     /// @}
     /// @defgroup Branching ops
@@ -281,15 +277,13 @@ const Code rom[] {                ///< Forth dictionary
          _descope("const", vm)),
     IMMD("variable",
          _enscope("var", vm, new Code(word()));
-         Code *w = ADD_W(new Var(DU0)); /// * w = last i.e. defined word
-         printf("..w=%s=%p..", w->name, w);
-         w->pf[-1]->token = w->token;
+         ADD_W(new Var(DU0));
          _descope("var", vm)),
     IMMD("postpone",
          const Code *w = find(word()); if (!w) return;
          ADD_W(w)),
     CODE("immediate", last->immd = 1),
-    CODE("exit",   UNNEST()),           /// -- (exit from word)
+    CODE("exit",   UNNEST()),                  /// -- (exit from word)
     /// @}
     /// @defgroup metacompiler
     /// @brief - dict is directly used, instead of shield by macros
@@ -297,12 +291,10 @@ const Code rom[] {                ///< Forth dictionary
     CODE("exec", (*dict)[POPI()]->nest(vm)),                     /// w --
     CODE("create",
          _enscope("create", vm, new Code(word()));
-         Code *w = ADD_W(new Var(DU0)); ///< w is the new word created
-         w->pf[-1]->token = w->token;
-         w->pf[-1]->q.pop();
+         ADD_W(new Var(DU0, false));                             /// * last = the newly created word
          _descope("create", vm)),
     IMMD("does>",
-         Code *w = ADD_W(new Bran(_does));
+         Code *w = ADD_W(new Bran(_does));                       ///< w, newly created word
          w->pf[-1]->token = w->token),                           /// keep WP
     CODE("to",                                                   /// n --
          const Code *w = find(word()); if (!w) return;
@@ -321,10 +313,9 @@ const Code rom[] {                ///< Forth dictionary
     CODE("!",       U32 i_w = POPI(); VAR(i_w) = POP()),         /// n a -- 
     CODE("+!",      U32 i_w = POPI(); VAR(i_w) += POP()),
     CODE("?",       U32 i_w = POPI(); dot(DOT, VAR(i_w))),
-    CODE(",",       last->pf[0]->q.push(POP())),
+    CODE(",",       ((Var*)last)->comma(POP())),
     CODE("cells",   { /* for backward compatible */ }),          /// array index, inc by 1
-    CODE("allot",   U32 n = POPI();                              /// n --
-         for (U32 i=0; i<n; i++) last->pf[0]->q.push(DU0)),
+    CODE("allot",   ((Var*)last)->alloc(POPI())),                /// n --
     ///> Note:
     ///>   allot allocate elements in a word's q[] array
     ///>   to access, both indices to word itself and to q array are needed
@@ -372,8 +363,7 @@ const Code rom[] {                ///< Forth dictionary
     /// @defgroup OS ops
     /// @{
     IMMD("include", load(vm, word())),                          /// include an OS file
-    CODE("included",                                            /// include a file (programmable)
-         POP(); U32 i_w = POPI(); load(vm, STR(i_w))),
+    CODE("included",POP(); load(vm, STR(POPI()))),              /// include a file (programmable)
     CODE("ok",      mem_stat()),                                /// display memory stat
     CODE("clock",   PUSH(millis())),                            /// get system clock in msec
     CODE("rnd",     PUSH(RND())),                               /// get a random number
@@ -395,12 +385,13 @@ Code::Code(const char *s, const char *d, XT fp, U32 a)    ///> primitive word
 Code::Code(const char *s, bool n) {                       ///< new colon word
     const Code *w = find(s);                              /// * scan the dictionary
     name  = w ? w->name : (new string(s))->c_str();       /// * copy the name
-    desc  = "";
     xt    = w ? w->xt : NULL;
     token = n ? dict->size() : 0;
     printf(" => new Code(%s)=%p token=%d\n", s, w ? w : this, token);
     if (n && w) pstr("reDef?");                           /// * warn word redefined
 }
+FV<FV<DU>> *Var::qv = new FV<FV<DU>>;
+FV<string> *Str::sv = new FV<string>;
 ///
 ///> Forth inner interpreter
 ///
@@ -437,7 +428,7 @@ void _str( VM &vm, Code &c)  {
     if (!c.token) pstr(c.name);
     else { PUSH(c.token); PUSH(strlen(c.name)); }
 }
-void _lit( VM &vm, Code &c) { PUSH(c.q[0]);  }
+void _lit( VM &vm, Code &c) { PUSH(((Lit*)&c)->lit); }
 void _var( VM &vm, Code &c) { PUSH(c.token); }
 void _toi( VM &vm, Code &c) { vm.i.push(POP()); }
 void _toi2(VM &vm, Code &c) { vm.i.push(POP()); vm.i.push(POP()); }
