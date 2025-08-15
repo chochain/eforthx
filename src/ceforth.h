@@ -84,7 +84,6 @@ struct ALIGNAS VM {
     vm_state state   = STOP;       ///< VM status
     IU       compile = 0;          ///< compiler status
 
-    string   pad;
 #if DO_MULTITASK
     static int      NCORE;         ///< number of hardware cores
     
@@ -125,21 +124,22 @@ struct Code;                       ///< Code class forward declaration
 typedef void (*XT)(VM &vm, Code&); ///< function pointer
 
 struct Code  {                     ///> Colon words
-    const static U32 IMMD_FLAG = 0x80000000;
+    static const U32 IMMD_FLAG = 0x80000000;
     const char *name;              ///< name of word
-    const char *desc;              ///< reserved
+    const char *desc;              ///< descriptions for built-in
     XT         xt = NULL;          ///< execution token
     FV<Code*>  pf;                 ///< parameter field
-    FV<DU>     q;                  ///< parameter field - literal
     FV<Code*>  vt;                 ///< vtable for methods
+    union {
+        DU     lit;                ///< constant stores here
+        DU     *q;                 ///< variable array pointer
+    };
     union {                        ///< union to reduce struct size
         U32 attr = 0;              /// * zero all sub-fields
         struct {
-            U32 token   : 16;      ///< dict index, 0=param word, 64K max
-            U32 ref     : 11;      ///< reference count, 2K max
+            U32 token   : 24;      ///< dict index, 0=param word, 64K max
+            U32 ref     :  6;      ///< 2^n number of elements 
             U32 is_bran :  1;      ///< branching opcode
-            U32 stage   :  2;      ///< branching state
-            U32 is_str  :  1;      ///< string flag
             U32 immd    :  1;      ///< immediate flag
         };
     };
@@ -184,18 +184,38 @@ void   _module(VM &vm,Code &c);
 ///
 ///> polymorphic constructors
 ///
-struct Lit : Code { Lit(DU d) : Code(_lit) { q.push(d); } };
-struct Var : Code { Var(DU d) : Code(_var) { q.push(d); } };
-struct Str : Code {
-    Str(const char *s, int tok=0, int len=0) : Code(_str) {
-        name  = (new string(s))->c_str();   /// * hardcopy the string
-        token = (len << 16) | tok;   /// * encode word index and string length
-        is_str= 1;
+struct Lit : Code { Lit(DU d) : Code(_lit) { lit = d; } };
+struct Var : Code {
+    static FV<FV<DU>> *qv;         ///< value storage
+    static DU *QV(int w, int i) { return (*qv)[w].data() + i; }
+    Var(DU d, bool alloc=true) : Code(_var) {
+        token = qv->size();
+        FV<DU> &a = *new FV<DU>;
+        qv->push(a);
+        a.push(d);                 /// * allocate the array
+        if (!alloc) a.pop();       /// * remove it (for create)
+        q = a.data();
+        printf("Var %s tok=%d sz=%ld q=%p\n", name, token, qv->size(), q);
     }
+    void comma(DU d)   {
+        FV<DU> &a = (*qv)[token];
+        a.push(d);
+        q = a.data();              /// * recache pointer
+        printf("before comma qv[%d].sz=%ld q=%p\n", token, a.size(), q);
+    }
+    void alloc(int n)  { for (int i=0; i < n; i++) comma(DU0); }
+};
+struct Str  : Code {
+    static FV<string> *sv;         ///< string storage
+    static const char *SV(int w) { return (*sv)[w].c_str(); }
+    Str(const char *s, bool dot=false) : Code(_str) {
+        token = dot ? 0 : sv->size();                /// * encode word index
+        sv->push(*(new string(s)));
+        name  = (*sv)[-1].c_str();                   /// * keep C string
+    }
+    const char *str() { return (*sv)[token].c_str(); }
 };
 struct Bran : Code {
-//    FV<Code*>  p1;                   ///< parameter field - if..else, aft..then
-//    FV<Code*>  p2;                   ///< parameter field - then..next
     Bran(XT fp) : Code(fp) {
         const char *nm[] = {
             "if", "else", "then", "begin", "while", "end",
@@ -208,7 +228,6 @@ struct Bran : Code {
         for (int i=0; i < (int)(sizeof(nm)/sizeof(const char*)); i++) {
             if ((uintptr_t)xt[i]==(uintptr_t)fp) name = nm[i];
         }
-        is_str  = 0;
         is_bran = 1;
     }
 };
