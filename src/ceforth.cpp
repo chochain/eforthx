@@ -313,9 +313,9 @@ const Code rom[] {                ///< Forth dictionary
     CODE("!",       U32 i_w = POPI(); VAR(i_w) = POP()),         /// n a -- 
     CODE("+!",      U32 i_w = POPI(); VAR(i_w) += POP()),
     CODE("?",       U32 i_w = POPI(); dot(DOT, VAR(i_w))),
-    CODE(",",       ((Var*)last)->comma(POP())),
+    CODE(",",       ((Var*)last->pf[0])->comma(POP())),
     CODE("cells",   { /* for backward compatible */ }),          /// array index, inc by 1
-    CODE("allot",   ((Var*)last)->alloc(POPI())),                /// n --
+    CODE("allot",   ((Var*)last->pf[0])->allot(POPI())),         /// n --
     ///> Note:
     ///>   allot allocate elements in a word's q[] array
     ///>   to access, both indices to word itself and to q array are needed
