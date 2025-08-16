@@ -80,11 +80,12 @@ struct ALIGNAS VM {
     DU       tos     = -DU1;       ///< cached top of stack
     IU       id      = 0;          ///< vm id
     
-    U8       *base   = 0;          ///< numeric radix (a pointer)
     vm_state state   = STOP;       ///< VM status
     IU       compile = 0;          ///< compiler status
 
 #if DO_MULTITASK
+    IU       wp      = 0;          ///< current word pointer
+
     static int      NCORE;         ///< number of hardware cores
     
     static bool     io_busy;       ///< IO locking control
@@ -126,13 +127,12 @@ typedef void (*XT)(VM &vm, Code&); ///< function pointer
 struct Code  {                     ///> Colon words
     static const U32 IMMD_FLAG = 0x80000000;
     const char *name;              ///< name of word
-    const char *desc;              ///< descriptions for built-in
     XT         xt = NULL;          ///< execution token
     FV<Code*>  pf;                 ///< parameter field
     FV<Code*>  vt;                 ///< vtable for methods
     union {
-        DU     lit;                ///< constant stores here
-        DU     *q;                 ///< variable array pointer
+        const char *desc;          ///< descriptions for built-in
+        DU    lit;                 ///< constant stores here
     };
     union {                        ///< union to reduce struct size
         U32 attr = 0;              /// * zero all sub-fields
@@ -154,6 +154,7 @@ struct Code  {                     ///> Colon words
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
 #define BASE_NODE   0                        /* use this node to store radix          */
+#define BASE        ((U8*)(Var::QV(BASE_NODE, vm.id)))
 #define BOOL(f)     ((f) ? -1 : 0)           /* Forth use 0xffff instead of 1 as in C */
 #define TOS         (vm.tos)
 #define SS          (vm.ss)
@@ -190,20 +191,15 @@ struct Var : Code {
     static DU *QV(int w, int i) { return (*qv)[w].data() + i; }
     Var(DU d, bool alloc=true) : Code(_var) {
         token = qv->size();
-        FV<DU> &a = *new FV<DU>;
-        qv->push(a);
-        a.push(d);                 /// * allocate the array
-        if (!alloc) a.pop();       /// * remove it (for create)
-        q = a.data();
-        printf("Var %s tok=%d sz=%ld q=%p\n", name, token, qv->size(), q);
+        FV<DU> *a = new FV<DU>;
+        if (token) printf("var %p qv[0]=%p data=%p =>\n", a, &(*qv)[0], (*qv)[0].data());
+        if (alloc) a->push(d);     /// * populate a cell
+        qv->push(*a);              /// * hard copy
+        printf("var %p=>qv[0]=%p data=%p\n", a, &(*qv)[0], (*qv)[0].data());
     }
-    void comma(DU d)   {
-        FV<DU> &a = (*qv)[token];
-        a.push(d);
-        q = a.data();              /// * recache pointer
-        printf("before comma qv[%d].sz=%ld q=%p\n", token, a.size(), q);
-    }
-    void alloc(int n)  { for (int i=0; i < n; i++) comma(DU0); }
+    void comma(DU d)   { (*qv)[token].push(d); }
+    void alloc(int n)  { (*qv)[token].reserve(n); }
+    DU   *var(int i)   { return (*qv)[token].data() + i; }
 };
 struct Str  : Code {
     static FV<string> *sv;         ///< string storage
