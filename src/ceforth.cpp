@@ -51,6 +51,9 @@ void _enscope(const char *s, VM &vm, Code *c) {
 }
 void _descope(const char *s, VM &vm) {
     dstat(s, vm);
+    if (VS.size() < 2) {           /// * guard the root namespace
+        pstr("VS.sz? "); return;
+    }  
     VS.pop();                      /// restore outer namespace
     dict = &VS[-1]->vt;
     last = VS[-vm.compile]->vt[-1];
@@ -268,7 +271,7 @@ const Code rom[] {                ///< Forth dictionary
     /// @defgrouop Compiler ops
     /// @{
     IMMD("[",      vm.i.push(vm.compile); vm.compile=0),
-    IMMD("]",      vm.compile=vm.i.pop()),
+    IMMD("]",      if (vm.i.size()) vm.compile=vm.i.pop()),
     IMMD(":",      _enscope(":", vm, new Code(word()))),
     IMMD(";",      _descope(";", vm)),
     IMMD("constant",
