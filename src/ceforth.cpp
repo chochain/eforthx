@@ -18,16 +18,16 @@ Code           *last;                 ///< last word cached aka CURRENT
 ///
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
+#define BASE         ((U8*)(Var::QV(BASE_NODE, vm.id))) /** numeric radix per VM       */
 #define VAR(i_w)     (*Var::QV((i_w) & 0xffff, (i_w) >> 16))
 #define STR(i_w)     (Str::SV(i_w))
-#define BASE         ((U8*)&VAR((vm.id << 16) | BASE_NODE))
 #define DICT_PUSH(c) (dict->push(last=(Code*)(c)))
 #define DICT_POP()   (delete dict->pop(),last=(*dict)[-1])
-#define ADD_W(w)     (last->append((Code*)w))          /** add w and return last      */
-#define BLAST        (VS[-2]->vt[-1])                  /** last word before branching */
-#define BTGT         ((Bran*)(BLAST->pf[-1]))          /** branching target           */
-#define BRAN(p)      ((p).merge(last->pf))             /** add branching code         */
-#define BEND()       (delete dict->pop(),last=BLAST)   /** pop branching tmp off dict */
+#define ADD_W(w)     (last->append((Code*)w))           /** add w and return last      */
+#define BLAST        (VS[-2]->vt[-1])                   /** last word before branching */
+#define BTGT         ((Bran*)(BLAST->pf[-1]))           /** branching target           */
+#define BRAN(p)      ((p).merge(last->pf))              /** add branching code         */
+#define BEND()       (delete dict->pop(),last=BLAST)    /** pop branching tmp off dict */
 #define NEST(pf)     for (auto w : (pf)) w->nest(vm)
 #define UNNEST()     throw 0
 
@@ -350,14 +350,14 @@ const Code rom[] {                ///< Forth dictionary
     CODE("'",
          const Code *w = find(word()); if (w) PUSH(w->token)),
     CODE(".s",      ss_dump(vm, true)),                         /// dump parameter stack
-    CODE("words",   words(*vm.base)),                           /// display word lists
+    CODE("words",   words(*BASE)),                              /// display word lists
     CODE("see",
          const Code *w = find(word());
-         if (w) see(*w, *vm.base);
+         if (w) see(*w, *BASE);
          dot(CR)),
-    CODE("dict",    dict_dump(*vm.base)),                       /// display dictionary
+    CODE("dict",    dict_dump(*BASE)),                          /// display dictionary
     CODE("dump",                                                /// ' xx 1 dump
-         IU n = POPI(); mem_dump(POPI(), n, *vm.base)), 
+         IU n = POPI(); mem_dump(POPI(), n, *BASE)), 
     CODE("depth",   PUSH(SS.size())),                           /// data stack depth
     /// @}
     /// @defgroup OS ops
@@ -381,7 +381,7 @@ const Code rom[] {                ///< Forth dictionary
 ///> Code Class constructors
 ///
 Code::Code(const char *s, const char *d, XT fp, U32 a)    ///> primitive word
-    : name(s), desc(d), xt(fp), attr(a) {}
+    : name(s), xt(fp), attr(a) { desc = d; }
 Code::Code(const char *s, bool n) {                       ///< new colon word
     const Code *w = find(s);                              /// * scan the dictionary
     name  = w ? w->name : (new string(s))->c_str();       /// * copy the name
@@ -531,7 +531,7 @@ void forth_core(VM &vm, const char *idiom) {
         else w->nest(vm);             /// * execute forth word
         return;
     }
-    DU  n = parse_number(idiom, *vm.base);  ///< try as a number, throw exception
+    DU  n = parse_number(idiom, *BASE);  ///< try as a number, throw exception
     if (vm.compile)                   /// * are we compiling new word?
         ADD_W(new Lit(n));            /// * append numeric literal to it
     else PUSH(n);                     /// * add value to data stack
