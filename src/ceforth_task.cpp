@@ -15,11 +15,9 @@ void uvar_init() {
     Str::sv->push(*new string);    ///< sv[0] serves as pad
     Var *v  = new Var(10);         ///< borrow dict[0] to keep radices
     root.vt[BASE_NODE]->append(v); /// * root->pf[0]->q[vm.id] for VM's user area
-    
+
     _vm0.id    = 0;                /// * VM id
     _vm0.state = HOLD;             /// * VM ready to run
-    _vm0.base  = (U8*)v->q;        /// * set base pointer
-    *_vm0.base = 10;
 }
 
 #else // DO_MULTITASK
@@ -119,16 +117,13 @@ void t_pool_stop() {
 ///> setup/teardown user area (base pointer)
 ///
 void uvar_init() {
-    Str::sv.push(*new string);                    ///< sv[0] serves as pad
-    Var *v = new Var(10);                         ///< borrow root to keep radix
-    v->alloc(E4_VM_POOL_SZ - 1);
+    Str::sv->push(*new string);                   ///< sv[0] serves as pad
+    Var *v = new Var(10, false);                  ///< borrow root to keep radices
+    v->alloc(E4_VM_POOL_SZ);                      ///< preallocate cells
     root.vt[BASE_NODE]->append(v);                /// * borrow root->pf[0]->q[vm.id] for VM's user area
-
-    v->q.reserve(E4_VM_POOL_SZ);
+    
     for (int i = 0; i < E4_VM_POOL_SZ; i++) {
-        if (i > 0) v->var(i) = 10;                /// * allocate next base storage
-        _vm[i].base = (U8*)&v->q[i];              /// * set base pointer
-        _vm[i].id   = i;                          /// * VM id
+        _vm[i].id = i;                            /// * VM id
         _vm[i].reset(0, STOP);
     }
     _vm[0].state = HOLD;
