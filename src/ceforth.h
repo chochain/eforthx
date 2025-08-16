@@ -191,14 +191,15 @@ struct Var : Code {
     Var(DU d, bool alloc=true) : Code(_var) {
         token = qv->size();
         FV<DU> *a = new FV<DU>;
-        if (token) printf("var %p qv[0]=%p data=%p =>\n", a, &(*qv)[0], (*qv)[0].data());
         if (alloc) a->push(d);     /// * populate a cell
         qv->push(*a);              /// * hard copy
-        printf("var %p=>qv[0]=%p data=%p\n", a, &(*qv)[0], (*qv)[0].data());
+        printf("var [%d]qv[%ld]=%p <= %p\n", token, (*qv)[token].size(), &(*qv)[token], a);
     }
     void comma(DU d)   { (*qv)[token].push(d); }
-    void alloc(int n)  { (*qv)[token].reserve(n); }
-    DU   *var(int i)   { return (*qv)[token].data() + i; }
+    void allot(int n)  {           /// * allocate n cells
+        (*qv)[token].reserve(n);
+        for (int i=0; i<n; i++) comma(DU0);
+    }
 };
 struct Str  : Code {
     static FV<string> *sv;         ///< string storage
