@@ -193,7 +193,7 @@ struct Var : Code {
         FV<DU> *a = new FV<DU>;
         if (alloc) a->push(d);     /// * populate a cell
         qv->push(*a);              /// * hard copy
-        printf("var [%d]qv[%ld]=%p <= %p\n", token, (*qv)[token].size(), &(*qv)[token], a);
+//        printf("var [%d]qv[%ld]=%p <= %p\n", token, (*qv)[token].size(), &(*qv)[token], a);
     }
     void comma(DU d)   { (*qv)[token].push(d); }
     void allot(int n)  {           /// * allocate n cells
