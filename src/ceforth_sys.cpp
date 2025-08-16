@@ -114,15 +114,16 @@ void ss_dump(VM &vm, bool forced) {       ///> display data stack and ok promt
         for (int i=0; i < vm.compile; i++) fout << "> ";
     }
     else {
+        U8 *base = (U8*)Var::QV(BASE_NODE, vm.id); 
         SS.push(TOS);
-        for (DU v : SS) { fout << rdx(v, *vm.base) << ' '; }
+        for (DU v : SS) { fout << rdx(v, *base) << ' '; }
         TOS = SS.pop();
         fout << "ok ";
     }
     fout << FLUSH;
 }
 typedef uintptr_t UFP;
-void _see(const Code &c, int dp) {               ///< disassemble a colon word
+void _see(const Code &c, int dp) {                ///< disassemble a colon word
     static const FV<Code*> nil = {};
     auto hdr = [](const string &s, int dp) {
         if (dp && s != "\t") { fout << ENDL; }    ///> newline control (skip branching \t)
