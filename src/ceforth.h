@@ -154,7 +154,6 @@ struct Code  {                     ///> Colon words
 ///> macros to reduce verbosity (but harder to single-step debug)
 ///
 #define BASE_NODE   0                        /* use this node to store radix          */
-#define BASE        ((U8*)(Var::QV(BASE_NODE, vm.id)))
 #define BOOL(f)     ((f) ? -1 : 0)           /* Forth use 0xffff instead of 1 as in C */
 #define TOS         (vm.tos)
 #define SS          (vm.ss)
